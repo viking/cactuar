@@ -1,12 +1,17 @@
 require 'sinatra/base'
 require 'openid'
 require 'openid/store/filesystem'
+require 'sequel'
+require 'digest/md5'
 
 class Cactuar < Sinatra::Base
   enable :sessions
   set :sessions, true
   set :logging, true
   set :erb, :trim => '-'
+
+  Database = Sequel.connect "sqlite://%s/db/users.sqlite3" %
+    File.expand_path(File.dirname(__FILE__) + '/..')
 
   def self.get_or_post(path, opts={}, &block)
     get(path, opts, &block)
@@ -151,3 +156,5 @@ class Cactuar < Sinatra::Base
     erb :xrds
   end
 end
+
+require File.dirname(__FILE__) + "/cactuar/user"

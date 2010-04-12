@@ -20,4 +20,13 @@ class Test::Unit::TestCase
   def last_html_doc
     Nokogiri.HTML(last_response.body)
   end
+
+  def teardown
+    db = Cactuar::Database
+    db.tables.each do |name|
+      db[name].delete
+    end
+  end
 end
+
+require 'factory_girl'
