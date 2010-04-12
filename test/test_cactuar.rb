@@ -11,7 +11,35 @@ class CactuarTest < Test::Unit::TestCase
     assert_equal "application/xrds+xml", last_response["Content-Type"]
 
     doc = Nokogiri.XML(last_response.body)
-    assert doc.at("Service Type")
+
+    type = doc.at("Service Type")
+    assert type
+    assert_equal OpenID::OPENID_IDP_2_0_TYPE, type.inner_html
+
+    uri = doc.at("Service URI")
+    assert uri
+    assert_equal "http://example.org/openid/auth", uri.inner_html
+  end
+
+  def test_yadis_initiation_from_user_url
+    get '/viking'
+    assert_equal "http://example.org/viking/xrds", last_response["X-XRDS-Location"]
+  end
+
+  def test_yadis_document_from_user_url
+    get '/viking/xrds'
+    assert_equal "application/xrds+xml", last_response["Content-Type"]
+
+    doc = Nokogiri.XML(last_response.body)
+
+    type = doc.at("Service Type")
+    assert type
+    assert_equal OpenID::OPENID_2_0_TYPE, type.inner_html
+
+    delegate = doc.at_xpath("/xrds:XRDS/xmlns:XRD/xmlns:Service/Delegate")
+    assert delegate
+    assert_equal "http://example.org/viking", delegate.inner_html
+
     uri = doc.at("Service URI")
     assert uri
     assert_equal "http://example.org/openid/auth", uri.inner_html

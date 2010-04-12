@@ -25,8 +25,8 @@ class Cactuar < Sinatra::Base
       "#{request.scheme}://#{request.host}#{port_part}#{suffix}"
     end
 
-    def url_for_user
-      absolute_url("/#{session['username']}")
+    def url_for_user(username = session['username'])
+      absolute_url("/#{username}")
     end
 
     def is_authorized?(identity_url, trust_root)
@@ -67,9 +67,7 @@ class Cactuar < Sinatra::Base
   end
 
   get '/openid/xrds' do
-    @types = [
-      OpenID::OPENID_IDP_2_0_TYPE   # id_select only
-    ]
+    @types = [ OpenID::OPENID_IDP_2_0_TYPE ]  # id_select
     content_type("application/xrds+xml")
     erb :xrds
   end
@@ -82,8 +80,8 @@ class Cactuar < Sinatra::Base
       identity = oid_request.identity
 
       if oid_request.id_select
-        # This happens when the user specified OP identifier only.
-        # For example: http://yahoo.com
+        # This happens when the user specified OP identifier
+        # only (in IDP mode)
 
         if oid_request.immediate
           # This fails because further setup is needed
@@ -140,4 +138,16 @@ class Cactuar < Sinatra::Base
   # TODO: for now, auto-allow
   #post '/decide' do
   #end
+
+  get '/:username' do
+    headers('X-XRDS-Location' => absolute_url("/#{params[:username]}/xrds"))
+    ""
+  end
+
+  get '/:username/xrds' do
+    @types = [ OpenID::OPENID_2_0_TYPE ]
+    @delegate = url_for_user(params[:username])
+    content_type("application/xrds+xml")
+    erb :xrds
+  end
 end

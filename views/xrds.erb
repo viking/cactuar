@@ -5,6 +5,9 @@
     <%- @types.each do |url| -%>
       <Type><%= url %></Type>
     <%- end -%>
+    <%- if @delegate -%>
+      <openid:Delegate><%= @delegate %></openid:Delegate>
+    <%- end -%>
       <URI><%= absolute_url("/openid/auth") %></URI>
     </Service>
   </XRD>
