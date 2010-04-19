@@ -3,6 +3,7 @@ require 'openid'
 require 'openid/store/filesystem'
 require 'sequel'
 require 'digest/md5'
+require 'rack-flash'
 
 class Cactuar < Sinatra::Base
   enable :sessions
@@ -129,20 +130,36 @@ class Cactuar < Sinatra::Base
     # TODO: cancelling
     oid_request = session['last_oid_request']
 
-    identity = oid_request.identity
-    if oid_request.id_select
-      session['username'] = params['username']
-      identity = url_for_user
-    end
+    if user = User.authenticate(params['username'], params['password'])
+      session['username'] = user.username
 
-    oid_response = oid_request.answer(true, nil, identity)
-    # TODO: add sreg and pape
-    render_openid_response(oid_response)
+      identity = url_for_user
+      if oid_request.id_select || identity == oid_request.identity
+        oid_response = oid_request.answer(true, nil, identity)
+        # TODO: add sreg and pape
+        return render_openid_response(oid_response)
+      end
+    end
+    erb(:login)
   end
 
   # TODO: for now, auto-allow
   #post '/decide' do
   #end
+
+  get '/openid/signup' do
+    @user = User.new
+    erb :signup
+  end
+
+  post '/openid/signup' do
+    @user = User.new(params[:user])
+    if @user.save
+      redirect "/#{@user.username}"
+    else
+      erb :signup
+    end
+  end
 
   get '/:username' do
     headers('X-XRDS-Location' => absolute_url("/#{params[:username]}/xrds"))

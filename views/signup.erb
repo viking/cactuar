@@ -1,0 +1,16 @@
+<h1>Signup</h1>
+<form action="/openid/signup" method="post">
+  <p>
+    <label for="username">Username</label><br/>
+    <input id="username" name="user[username]" type="text" value="<%= @user.username %>" />
+  </p>
+  <p>
+    <label for="password">Password</label><br/>
+    <input id="password" name="user[password]" type="password" />
+  </p>
+  <p>
+    <label for="password_confirmation">Password Confirmation</label><br/>
+    <input id="password_confirmation" name="user[password_confirmation]" type="password" />
+  </p>
+  <input type="submit" value="Submit" />
+</form>

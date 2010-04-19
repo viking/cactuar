@@ -31,6 +31,11 @@ class Cactuar
       assert !user.valid?
     end
 
+    def test_requires_matching_passwords
+      user = Factory.build(:user, :password_confirmation => "blargh")
+      assert !user.valid?
+    end
+
     def test_valid_user
       user = Factory(:user)
       assert user.valid?

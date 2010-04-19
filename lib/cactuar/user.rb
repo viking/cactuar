@@ -39,7 +39,7 @@ class Cactuar
           errors[:password] << 'is required'
         end
 
-        if password_confirmation.nil?
+        if password_confirmation != password
           errors[:base] << 'Passwords do not match'
         end
       end

@@ -182,28 +182,36 @@ class CactuarTest < Test::Unit::TestCase
   end
 
   def test_successful_login_with_id_select
+    user = Factory(:user, :username => 'viking')
+
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => nil, :id_select => true })
 
-    post '/openid/login', { 'username' => 'viking' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  #def test_login_does_not_resign_response
-    #openid_server_setup
-    #signatory = stub("signatory")
-    #@server.stubs(:signatory).returns(signatory)
-    #signatory.expects(:sign).never
-    #@oid_response.stubs({:needs_signing => true, :signed? => true})
-    #@oid_request.stubs(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
-    #@oid_request.stubs({ :identity => nil, :id_select => true })
+  def test_failed_login
+    user = Factory(:user, :username => 'viking')
+    oid_request = stub('oid request')
 
-    #post '/login', { 'username' => 'viking' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
-    #assert last_response.ok?
-    #assert_equal "blargh", last_response.body
-  #end
+    post '/openid/login', { 'username' => 'viking', 'password' => 'wrong' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    assert last_response.ok?
+    assert_match %r{<h1>Login</h1>}, last_response.body
+  end
+
+  def test_correct_login_for_wrong_identifier
+    user = Factory(:user, :username => 'viking')
+    oid_request = stub('oid request', {
+      :identity => 'http://example.org/monkey', :id_select => false
+    })
+
+    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    assert last_response.ok?
+    assert_match %r{<h1>Login</h1>}, last_response.body
+  end
 
   #def test_decide_yes_from_
     #params = { 'login' => { 'allow' => 'true' } }
@@ -213,4 +221,23 @@ class CactuarTest < Test::Unit::TestCase
     #session = { 'username' => 'viking' }
     #get '/decide', params, { 'rack.session' => session }
   #end
+
+  def test_signup
+    get '/openid/signup'
+    assert last_response.ok?
+  end
+
+  def test_successful_signup
+    count = Cactuar::User.count
+    post '/openid/signup', { 'user' => Factory.attributes_for(:user) }
+    assert_equal count + 1, Cactuar::User.count
+    assert last_response.redirect?
+  end
+
+  def test_failed_signup
+    count = Cactuar::User.count
+    post '/openid/signup', { 'user' => Factory.attributes_for(:user, :password => 'foobar') }
+    assert_equal count, Cactuar::User.count
+    assert last_response.ok?
+  end
 end
