@@ -62,6 +62,7 @@ class CactuarTest < Test::Unit::TestCase
     @server.stubs(:handle_request).with(@oid_request).returns(@oid_response)
     @server.stubs(:encode_response).with(@oid_response).returns(@web_response)
     OpenID::Server::Server.stubs(:new).with(@store, "http://example.org/openid/auth").returns(@server)
+    OpenID::SReg::Request.stubs(:from_openid_request).returns(nil)
   end
 
   def test_non_check_id_request
@@ -193,6 +194,18 @@ class CactuarTest < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
+  def test_successful_login_without_id_select
+    user = Factory(:user, :username => 'viking')
+
+    openid_server_setup
+    @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
+    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
+
+    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    assert last_response.ok?
+    assert_equal "blargh", last_response.body
+  end
+
   def test_failed_login
     user = Factory(:user, :username => 'viking')
     oid_request = stub('oid request')
@@ -211,6 +224,45 @@ class CactuarTest < Test::Unit::TestCase
     post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
     assert last_response.ok?
     assert_match %r{<h1>Login</h1>}, last_response.body
+  end
+
+  def test_simple_registration_from_auth
+    user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+
+    openid_server_setup(true)
+    @oid_request.stubs({
+      :identity => "http://example.org/viking",
+      :id_select => false, :immediate => true
+    })
+    @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
+
+    sreg_request = mock("sreg request", :all_requested_fields => %w{email fullname})
+    OpenID::SReg::Request.expects(:from_openid_request).returns(sreg_request)
+    sreg_response = mock("sreg response")
+    OpenID::SReg::Response.expects(:extract_response).with(sreg_request, { 'fullname' => "Jeremy Stephens", 'email' => 'test@example.com' }).returns(sreg_response)
+    @oid_response.expects(:add_extension).with(sreg_response)
+
+    get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+    assert_equal "blargh", last_response.body
+  end
+
+  def test_simple_registration_from_login
+    user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+
+    openid_server_setup
+    @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
+    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
+
+    sreg_request = mock("sreg request", :all_requested_fields => %w{email fullname})
+    OpenID::SReg::Request.expects(:from_openid_request).returns(sreg_request)
+    sreg_response = mock("sreg response")
+    OpenID::SReg::Response.expects(:extract_response).with(sreg_request, { 'fullname' => "Jeremy Stephens", 'email' => 'test@example.com' }).returns(sreg_response)
+    @oid_response.expects(:add_extension).with(sreg_response)
+
+    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    assert last_response.ok?
+    assert_equal "blargh", last_response.body
   end
 
   #def test_decide_yes_from_

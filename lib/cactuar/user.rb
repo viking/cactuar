@@ -12,6 +12,14 @@ class Cactuar
       Digest::MD5.hexdigest("#{salt}--#{password}")
     end
 
+    def nickname
+      username
+    end
+
+    def fullname
+      first_name && last_name ? "#{first_name} #{last_name}" : nil
+    end
+
     def save!
       self.class.raise_on_save_failure = true
       begin

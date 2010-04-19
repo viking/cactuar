@@ -53,10 +53,25 @@ class Cactuar
     end
 
     def test_authenticate
-      user = Factory(:user, :username => 'viking')
-      assert_equal user, User.authenticate('viking', 'secret')
-      assert_nil User.authenticate('viking', 'wrong')
+      user = Factory(:user)
+      assert_equal user, User.authenticate(user.username, 'secret')
+      assert_nil User.authenticate(user.username, 'wrong')
       assert_nil User.authenticate('nobody', 'wrong')
+    end
+
+    def test_fullname
+      user = Factory(:user, :first_name => 'Jeremy', :last_name => "Stephens")
+      assert_equal "Jeremy Stephens", user.fullname
+    end
+
+    def test_nil_fullname
+      user = Factory(:user, :first_name => nil, :last_name => nil)
+      assert_nil user.fullname
+    end
+
+    def test_nickname
+      user = Factory(:user)
+      assert_equal user.username, user.nickname
     end
   end
 end

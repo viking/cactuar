@@ -4,6 +4,7 @@ require 'nokogiri'
 require 'mocha'
 require 'ruby-debug'
 
+ENV['CACTUAR_ENV'] = 'test'
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'cactuar'
 

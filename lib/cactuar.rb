@@ -1,6 +1,7 @@
 require 'sinatra/base'
 require 'openid'
 require 'openid/store/filesystem'
+require 'openid/extensions/sreg'
 require 'sequel'
 require 'digest/md5'
 require 'rack-flash'
@@ -11,8 +12,10 @@ class Cactuar < Sinatra::Base
   set :logging, true
   set :erb, :trim => '-'
 
-  Database = Sequel.connect "sqlite://%s/db/users.sqlite3" %
-    File.expand_path(File.dirname(__FILE__) + '/..')
+  Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
+    File.expand_path(File.dirname(__FILE__) + '/..'),
+    ENV['CACTUAR_ENV'] || 'development'
+  ]
 
   def self.get_or_post(path, opts={}, &block)
     get(path, opts, &block)
@@ -35,6 +38,10 @@ class Cactuar < Sinatra::Base
       absolute_url("/#{username}")
     end
 
+    def current_user
+      @current_user ||= session['username'] ? User[:username => session['username']] : nil
+    end
+
     def is_authorized?(identity_url, trust_root)
       # TODO: add trust_root
       session['username'] && identity_url == url_for_user
@@ -47,6 +54,18 @@ class Cactuar < Sinatra::Base
         @server = OpenID::Server::Server.new(store, absolute_url("/openid/auth"))
       end
       @server
+    end
+
+    def add_sreg(oid_request, oid_response)
+      # check for Simple Registration arguments and respond
+      sreg_request = OpenID::SReg::Request.from_openid_request(oid_request)
+      return if sreg_request.nil?
+
+      fields = sreg_request.all_requested_fields & %w{nickname fullname email}
+      data = fields.inject({}) { |h, f| h[f] = current_user.send(f); h }
+
+      sreg_response = OpenID::SReg::Response.extract_response(sreg_request, data)
+      oid_response.add_extension(sreg_response)
     end
 
     def render_openid_response(oid_response)
@@ -109,7 +128,8 @@ class Cactuar < Sinatra::Base
         if is_authorized?(identity, nil)
           # Success!
           oid_response = oid_request.answer(true, nil, identity)
-          # TODO: add sreg and pape
+          add_sreg(oid_request, oid_response)
+          # TODO: add pape
         elsif oid_request.immediate
           # Failed immediate login
           oid_response = oid_request.answer(false, absolute_url("/openid/auth"))
@@ -136,7 +156,8 @@ class Cactuar < Sinatra::Base
       identity = url_for_user
       if oid_request.id_select || identity == oid_request.identity
         oid_response = oid_request.answer(true, nil, identity)
-        # TODO: add sreg and pape
+        add_sreg(oid_request, oid_response)
+        # TODO: add pape
         return render_openid_response(oid_response)
       end
     end
