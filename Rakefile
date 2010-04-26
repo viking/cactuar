@@ -1,24 +1,30 @@
-require 'sequel'
-require 'highline/import'
+require 'fileutils'
+
+namespace :environment do
+  task :main do
+    $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), 'lib'))
+    require 'cactuar'
+  end
+
+  task :test do
+    ENV['CACTUAR_ENV'] = 'test'
+    Rake::Task["environment:main"].execute
+  end
+end
 
 namespace :db do
-  desc 'Create the database'
-  task :create do
-    %w{development test}.each do |env|
-      db = Sequel.connect("sqlite://db/#{env}.sqlite3")
-      if db.tables.include?(:users) && env != "test"
-        confirm = ask("This will delete the current users table.  Cool? [yn] ") { |q| q.validate = /^(y|n)$/ }
-        exit if confirm == "n"
-      end
-      db.create_table! :users do
-        primary_key :id
-        String :username
-        String :first_name
-        String :last_name
-        String :email
-        String :crypted_password
-        String :salt
-      end
+  desc 'Run migrations'
+  task :migrate => "environment:main" do
+    require 'sequel/extensions/migration'
+    Sequel::Migrator.apply(Cactuar::Database, "db/migrate")
+  end
+
+  namespace :test do
+    task :prepare do
+      FileUtils.rm_f("db/test.sqlite3", :verbose => true)
+      Rake::Task["environment:test"].execute
+      require 'sequel/extensions/migration'
+      Sequel::Migrator.apply(Cactuar::Database, "db/migrate")
     end
   end
 end
