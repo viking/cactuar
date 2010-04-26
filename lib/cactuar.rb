@@ -11,6 +11,9 @@ class Cactuar < Sinatra::Base
   set :sessions, true
   set :logging, true
   set :erb, :trim => '-'
+  set :root,   File.join(File.dirname(__FILE__), '..')
+  set :public, File.join(File.dirname(__FILE__), '..', 'public')
+  set :views,  File.join(File.dirname(__FILE__), '..', 'views')
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
     File.expand_path(File.dirname(__FILE__) + '/..'),
