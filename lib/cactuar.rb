@@ -193,3 +193,4 @@ class Cactuar < Sinatra::Base
 end
 
 require File.dirname(__FILE__) + "/cactuar/user"
+require File.dirname(__FILE__) + "/cactuar/passenger"
