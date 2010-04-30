@@ -1,4 +1,6 @@
 require 'sinatra/base'
+require 'sinatra/url_for'
+require 'sinatra/static_assets'
 require 'openid'
 require 'openid/store/filesystem'
 require 'openid/extensions/sreg'
@@ -7,6 +9,9 @@ require 'digest/md5'
 require 'rack-flash'
 
 class Cactuar < Sinatra::Base
+  helpers Sinatra::UrlForHelper
+  register Sinatra::StaticAssets
+
   enable :sessions
   set :sessions, true
   set :logging, true
@@ -26,19 +31,8 @@ class Cactuar < Sinatra::Base
   end
 
   helpers do
-    # ganked from hancock
-    def absolute_url(suffix = nil)
-      port_part = case request.scheme
-                  when "http"
-                    request.port == 80 ? "" : ":#{request.port}"
-                  when "https"
-                    request.port == 443 ? "" : ":#{request.port}"
-                  end
-      "#{request.scheme}://#{request.host}#{port_part}#{suffix}"
-    end
-
     def url_for_user(username = session['username'])
-      absolute_url("/#{username}")
+      url_for("/#{username}", :full)
     end
 
     def current_user
@@ -54,7 +48,7 @@ class Cactuar < Sinatra::Base
       unless @server
         dir = Pathname.new(File.dirname(__FILE__)).join('..').join('data')
         store = OpenID::Store::Filesystem.new(dir)
-        @server = OpenID::Server::Server.new(store, absolute_url("/openid/auth"))
+        @server = OpenID::Server::Server.new(store, url_for("/openid/auth", :full))
       end
       @server
     end
@@ -90,7 +84,7 @@ class Cactuar < Sinatra::Base
   end
 
   get '/' do
-    headers('X-XRDS-Location' => absolute_url("/openid/xrds"))
+    headers('X-XRDS-Location' => url_for("/openid/xrds", :full))
     ""
   end
 
@@ -135,7 +129,7 @@ class Cactuar < Sinatra::Base
           # TODO: add pape
         elsif oid_request.immediate
           # Failed immediate login
-          oid_response = oid_request.answer(false, absolute_url("/openid/auth"))
+          oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
         else
           # No user is logged in
           session['last_oid_request'] = oid_request
@@ -186,7 +180,7 @@ class Cactuar < Sinatra::Base
   end
 
   get '/:username' do
-    headers('X-XRDS-Location' => absolute_url("/#{params[:username]}/xrds"))
+    headers('X-XRDS-Location' => url_for("/#{params[:username]}/xrds", :full))
     ""
   end
 

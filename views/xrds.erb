@@ -8,7 +8,7 @@
     <%- if @delegate -%>
       <openid:Delegate><%= @delegate %></openid:Delegate>
     <%- end -%>
-      <URI><%= absolute_url("/openid/auth") %></URI>
+      <URI><%= url_for("/openid/auth", :full) %></URI>
     </Service>
   </XRD>
 </xrds:XRDS>
