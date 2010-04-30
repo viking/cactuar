@@ -7,7 +7,7 @@ class Cactuar
 
     def call(env)
       # Very dodgy hax to correct the PATH_INFO
-      env["PATH_INFO"] = env["REQUEST_URI"].sub(/\?[^\?]*$/, "")
+      env["PATH_INFO"] = "/"  if env["PATH_INFO"] == ""
       r = @app.call(env)
     end
   end
