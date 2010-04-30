@@ -1,1 +1,12 @@
-<h1>Decide!</h1>
+<h1>Approve Consumer</h1>
+
+<form action="<%= url_for('/openid/decide') %>" method="post">
+  <p>
+    <strong><%= @trust_root %></strong> wants to authenticate you.
+    Do you want to trust this site?
+  </p>
+  <p>
+    <input type="submit" name="approve" value="Yes" />
+    <input type="submit" name="approve" value="No" />
+  </p>
+</form>

@@ -39,9 +39,12 @@ class Cactuar < Sinatra::Base
       @current_user ||= session['username'] ? User[:username => session['username']] : nil
     end
 
-    def is_authorized?(identity_url, trust_root)
-      # TODO: add trust_root
+    def is_authorized?(identity_url)
       session['username'] && identity_url == url_for_user
+    end
+
+    def is_trusted?(trust_root)
+      current_user && current_user.approvals_dataset[:trust_root => trust_root]
     end
 
     def server
@@ -63,6 +66,13 @@ class Cactuar < Sinatra::Base
 
       sreg_response = OpenID::SReg::Response.extract_response(sreg_request, data)
       oid_response.add_extension(sreg_response)
+    end
+
+    def finalize_auth(oid_request, identity)
+      oid_response = oid_request.answer(true, nil, identity)
+      add_sreg(oid_request, oid_response)
+      # TODO: add pape
+      oid_response
     end
 
     def render_openid_response(oid_response)
@@ -119,14 +129,22 @@ class Cactuar < Sinatra::Base
       end
 
       if oid_response.nil?
-        # This happens when the user specified their identifier, or if
-        # the user was already logged in.
+        # The only case this doesn't happen is on an id_select/immediate
 
-        if is_authorized?(identity, nil)
-          # Success!
-          oid_response = oid_request.answer(true, nil, identity)
-          add_sreg(oid_request, oid_response)
-          # TODO: add pape
+        if is_authorized?(identity)
+          # Logged in
+
+          if is_trusted?(oid_request.trust_root)
+            oid_response = finalize_auth(oid_request, identity)
+          else
+            if oid_request.immediate
+              oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
+            else
+              session['last_oid_request'] = oid_request
+              @trust_root = oid_request.trust_root
+              return erb(:decide)
+            end
+          end
         elsif oid_request.immediate
           # Failed immediate login
           oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
@@ -144,26 +162,44 @@ class Cactuar < Sinatra::Base
   end
 
   post '/openid/login' do
-    # TODO: cancelling
     oid_request = session['last_oid_request']
+    if params['cancel']
+      return redirect(oid_request.cancel_url)
+    end
 
     if user = User.authenticate(params['username'], params['password'])
       session['username'] = user.username
 
       identity = url_for_user
       if oid_request.id_select || identity == oid_request.identity
-        oid_response = oid_request.answer(true, nil, identity)
-        add_sreg(oid_request, oid_response)
-        # TODO: add pape
-        return render_openid_response(oid_response)
+        if is_trusted?(oid_request.trust_root)
+          oid_response = finalize_auth(oid_request, identity)
+          return render_openid_response(oid_response)
+        else
+          session['last_oid_request'] = oid_request
+          @trust_root = oid_request.trust_root
+          return erb(:decide)
+        end
       end
     end
     erb(:login)
   end
 
-  # TODO: for now, auto-allow
-  #post '/decide' do
-  #end
+  post '/openid/decide' do
+    if !current_user
+      return redirect('/')
+    end
+
+    oid_request = session['last_oid_request']
+
+    if params[:approve] == 'Yes'
+      Approval.create(:user => current_user, :trust_root => oid_request.trust_root)
+      oid_response = finalize_auth(oid_request, url_for_user)
+      render_openid_response(oid_response)
+    else
+      redirect oid_request.cancel_url
+    end
+  end
 
   get '/openid/signup' do
     @user = User.new
@@ -193,4 +229,4 @@ class Cactuar < Sinatra::Base
 end
 
 require File.dirname(__FILE__) + "/cactuar/user"
-require File.dirname(__FILE__) + "/cactuar/passenger"
+require File.dirname(__FILE__) + "/cactuar/approval"

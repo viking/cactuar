@@ -6,3 +6,8 @@ Factory.define :user, :class => Cactuar::User do |u|
   u.password "secret"
   u.password_confirmation "secret"
 end
+
+Factory.define :approval, :class => Cactuar::Approval do |a|
+  a.association :user
+  a.trust_root "http://leetsauce.org"
+end

@@ -36,7 +36,7 @@ class CactuarTest < Test::Unit::TestCase
     assert type
     assert_equal OpenID::OPENID_2_0_TYPE, type.inner_html
 
-    delegate = doc.at_xpath("/xrds:XRDS/xmlns:XRD/xmlns:Service/Delegate")
+    delegate = doc.at_xpath("/xrds:XRDS/xmlns:XRD/xmlns:Service/openid:Delegate")
     assert delegate
     assert_equal "http://example.org/viking", delegate.inner_html
 
@@ -53,7 +53,7 @@ class CactuarTest < Test::Unit::TestCase
       true
     end.returns(@store)
 
-    @oid_request = stub("openid request")
+    @oid_request = stub("openid request", :trust_root => "http://leetsauce.org")
     @oid_request.stubs(:is_a?).with(OpenID::Server::CheckIDRequest).returns(check_id_request)
     @oid_response = stub("openid response", :needs_signing => false)
     @web_response = stub("web response", :body => "blargh", :code => 200)
@@ -119,6 +119,9 @@ class CactuarTest < Test::Unit::TestCase
   end
 
   def test_successful_checkid_setup_with_id_select
+    user = Factory(:user, :username => "viking")
+    approval = Factory(:approval, :user => user)
+
     openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org",
@@ -145,6 +148,9 @@ class CactuarTest < Test::Unit::TestCase
   end
 
   def test_successful_checkid_immediate_without_id_select
+    user = Factory(:user, :username => "viking")
+    approval = Factory(:approval, :user => user)
+
     openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
@@ -184,6 +190,7 @@ class CactuarTest < Test::Unit::TestCase
 
   def test_successful_login_with_id_select
     user = Factory(:user, :username => 'viking')
+    approval = Factory(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -196,6 +203,7 @@ class CactuarTest < Test::Unit::TestCase
 
   def test_successful_login_without_id_select
     user = Factory(:user, :username => 'viking')
+    approval = Factory(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -215,6 +223,15 @@ class CactuarTest < Test::Unit::TestCase
     assert_match %r{<h1>Login</h1>}, last_response.body
   end
 
+  def test_cancelled_login
+    user = Factory(:user, :username => 'viking')
+    oid_request = stub('oid request', :cancel_url => "http://leetsauce.org")
+
+    post '/openid/login', { 'cancel' => 'Cancel' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    assert last_response.redirect?
+    assert_equal "http://leetsauce.org", last_response['location']
+  end
+
   def test_correct_login_for_wrong_identifier
     user = Factory(:user, :username => 'viking')
     oid_request = stub('oid request', {
@@ -226,8 +243,47 @@ class CactuarTest < Test::Unit::TestCase
     assert_match %r{<h1>Login</h1>}, last_response.body
   end
 
+  def test_logged_in_but_untrusted_root_with_immediate
+    user = Factory(:user, :username => "viking")
+    openid_server_setup(true)
+    @oid_request.stubs({
+      :identity => "http://example.org/viking",
+      :id_select => false, :immediate => true
+    })
+    @oid_request.expects(:answer).with(false, "http://example.org/openid/auth").returns(@oid_response)
+
+    get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+    assert_equal "blargh", last_response.body
+  end
+
+  def test_logged_in_but_untrusted_root_without_immediate
+    user = Factory(:user, :username => "viking")
+    openid_server_setup(true)
+    @oid_request.stubs({
+      :identity => "http://example.org/viking",
+      :id_select => false, :immediate => false
+    })
+
+    get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+    assert_match /trust/, last_response.body
+  end
+
+  def test_not_logged_in_with_untrusted_root
+    user = Factory(:user, :username => "viking")
+
+    openid_server_setup
+    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
+
+    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    assert last_response.ok?
+    assert_match /trust/, last_response.body
+  end
+
   def test_simple_registration_from_auth
     user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+    approval = Factory(:approval, :user => user)
 
     openid_server_setup(true)
     @oid_request.stubs({
@@ -249,6 +305,7 @@ class CactuarTest < Test::Unit::TestCase
 
   def test_simple_registration_from_login
     user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+    approval = Factory(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -264,15 +321,6 @@ class CactuarTest < Test::Unit::TestCase
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
-
-  #def test_decide_yes_from_
-    #params = { 'login' => { 'allow' => 'true' } }
-    #oid_request = mock("openid request", {
-      #:identity => "http://example.org/viking"
-    #})
-    #session = { 'username' => 'viking' }
-    #get '/decide', params, { 'rack.session' => session }
-  #end
 
   def test_signup
     get '/openid/signup'
@@ -291,5 +339,35 @@ class CactuarTest < Test::Unit::TestCase
     post '/openid/signup', { 'user' => Factory.attributes_for(:user, :password => 'foobar') }
     assert_equal count, Cactuar::User.count
     assert last_response.ok?
+  end
+
+  def test_positive_decision
+    user = Factory(:user, :username => 'viking')
+
+    openid_server_setup
+    @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
+    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
+
+    count = user.approvals_dataset.count
+    post '/openid/decide', { 'approve' => 'Yes' }, { 'rack.session' => { 'last_oid_request' => @oid_request, 'username' => 'viking' } }
+    assert last_response.ok?
+    assert_equal "blargh", last_response.body
+    assert_equal count + 1, user.approvals_dataset.count
+  end
+
+  def test_negative_decision
+    user = Factory(:user, :username => 'viking')
+
+    openid_server_setup
+    @oid_request.stubs({
+      :identity => "http://example.org/viking", :id_select => false,
+      :cancel_url => "http://leetsauce.org"
+    })
+
+    count = user.approvals_dataset.count
+    post '/openid/decide', { 'approve' => 'No' }, { 'rack.session' => { 'last_oid_request' => @oid_request, 'username' => 'viking' } }
+    assert last_response.redirect?
+    assert_equal "http://leetsauce.org", last_response['location']
+    assert_equal count, user.approvals_dataset.count
   end
 end

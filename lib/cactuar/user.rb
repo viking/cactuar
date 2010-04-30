@@ -1,6 +1,7 @@
 class Cactuar
   class User < Sequel::Model
     attr_accessor :password, :password_confirmation
+    one_to_many :approvals
 
     def self.authenticate(username, password)
       user = self[:username => username]

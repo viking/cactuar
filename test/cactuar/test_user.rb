@@ -6,6 +6,10 @@ class Cactuar
       assert_equal Sequel::Model, User.superclass
     end
 
+    def test_one_to_many_approvals
+      assert_respond_to User.new, :approvals
+    end
+
     def test_requires_username
       user = Factory.build(:user, :username => nil)
       assert !user.valid?
