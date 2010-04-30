@@ -101,7 +101,7 @@ class Cactuar < Sinatra::Base
   get '/openid/xrds' do
     @types = [ OpenID::OPENID_IDP_2_0_TYPE, OpenID::SREG_URI ]  # id_select
     content_type("application/xrds+xml")
-    erb :xrds
+    erb :xrds, :layout => false
   end
 
   get_or_post '/openid/auth' do
@@ -224,7 +224,7 @@ class Cactuar < Sinatra::Base
     @types = [ OpenID::OPENID_2_0_TYPE, OpenID::SREG_URI ]
     @delegate = url_for_user(params[:username])
     content_type("application/xrds+xml")
-    erb :xrds
+    erb :xrds, :layout => false
   end
 end
 

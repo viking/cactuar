@@ -1,5 +1,14 @@
 require 'fileutils'
 
+require 'rake/testtask'
+Rake::TestTask.new(:test) do |test|
+  test.libs << 'lib' << 'test'
+  test.pattern = 'test/**/test_*.rb'
+  test.verbose = true
+  test.ruby_opts = %w{-rubygems}
+end
+task :test => ['db:test:prepare']
+
 namespace :environment do
   task :main do
     $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), 'lib'))
@@ -29,3 +38,5 @@ namespace :db do
     end
   end
 end
+
+task :default => :test
