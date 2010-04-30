@@ -173,7 +173,7 @@ class Cactuar < Sinatra::Base
   post '/openid/signup' do
     @user = User.new(params[:user])
     if @user.save
-      redirect "/#{@user.username}"
+      redirect url_for("/#{@user.username}")
     else
       erb :signup
     end
