@@ -4,11 +4,10 @@ require 'nokogiri'
 require 'mocha'
 require 'ruby-debug'
 
-ENV['CACTUAR_ENV'] = 'test'
+ENV['RACK_ENV'] = 'test'
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'cactuar'
 
-Cactuar.set(:environment, :test)
 Cactuar.set(:sessions, false) # workaround
 
 class Test::Unit::TestCase

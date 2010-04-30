@@ -7,7 +7,7 @@ namespace :environment do
   end
 
   task :test do
-    ENV['CACTUAR_ENV'] = 'test'
+    ENV['RACK_ENV'] = 'test'
     Rake::Task["environment:main"].execute
   end
 end
@@ -20,6 +20,7 @@ namespace :db do
   end
 
   namespace :test do
+    desc 'Prepare test database'
     task :prepare do
       FileUtils.rm_f("db/test.sqlite3", :verbose => true)
       Rake::Task["environment:test"].execute

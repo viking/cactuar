@@ -17,7 +17,7 @@ class Cactuar < Sinatra::Base
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
     File.expand_path(File.dirname(__FILE__) + '/..'),
-    ENV['CACTUAR_ENV'] || 'development'
+    environment || 'development'
   ]
 
   def self.get_or_post(path, opts={}, &block)
