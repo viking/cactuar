@@ -61,7 +61,7 @@ class Cactuar < Sinatra::Base
 
     def authenticate!
       if !session['username']
-        redirect '/login'
+        redirect url_for('/login')
       end
     end
 
@@ -205,7 +205,7 @@ class Cactuar < Sinatra::Base
 
   post '/openid/decide' do
     if !current_user
-      return redirect('/')
+      return redirect(url_for('/'))
     end
 
     oid_request = session['last_oid_request']
