@@ -261,7 +261,8 @@ class Cactuar < Sinatra::Base
 
   post '/account/edit' do
     current_user.set_only(params[:user], :current_password, :password, :password_confirmation, :email)
-    if current_user.save
+    if current_user.valid?
+      current_user.save
       redirect url_for('/account')
     end
   end
@@ -282,7 +283,8 @@ class Cactuar < Sinatra::Base
 
   post '/admin/users' do
     @user = User.new(params[:user])
-    if @user.save
+    if @user.valid?
+      @user.save
       Mail.new({
         :to => @user.email,
         :from => 'noreply@example.org',
