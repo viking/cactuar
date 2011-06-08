@@ -1,5 +1,5 @@
 <h1>Login</h1>
-<form action="<%= url_for('/openid/login') %>" method="post">
+<form action="<%= url_for(login_action) %>" method="post">
   <p>
     <label for="username">Username</label><br/>
     <input name="username" type="text" />
@@ -10,6 +10,8 @@
   </p>
   <p>
     <input type="submit" value="Submit" />
-    <input type="submit" name="cancel" value="Cancel" />
+    <% if login_action == '/openid/login' %>
+      <input type="submit" name="cancel" value="Cancel" />
+    <% end %>
   </p>
 </form>

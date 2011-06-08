@@ -1,8 +1,12 @@
+require 'rubygems'
+require 'bundler'
+Bundler.setup(:default, :development)
+
 require 'test/unit'
 require 'rack/test'
 require 'nokogiri'
 require 'mocha'
-require 'ruby-debug'
+require 'factory_girl'
 
 ENV['RACK_ENV'] = 'test'
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
@@ -29,4 +33,4 @@ class Test::Unit::TestCase
   end
 end
 
-require 'factory_girl'
+Factory.find_definitions

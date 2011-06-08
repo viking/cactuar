@@ -7,6 +7,7 @@ require 'openid/extensions/sreg'
 require 'sequel'
 require 'digest/md5'
 require 'rack-flash'
+require 'mail'
 
 class Cactuar < Sinatra::Base
   helpers Sinatra::UrlForHelper
@@ -30,8 +31,19 @@ class Cactuar < Sinatra::Base
     post(path, opts, &block)
   end
 
+  before %r{^/admin(?:/.+)?$} do
+    authenticate!
+    if !current_user.admin
+      halt 403
+    end
+  end
+
+  before %r{^/account(?:/.+)?$} do
+    authenticate!
+  end
+
   helpers do
-    def url_for_user(username = session['username'])
+    def user_identity_url(username = session['username'])
       url_for("/#{username}", :full)
     end
 
@@ -40,11 +52,17 @@ class Cactuar < Sinatra::Base
     end
 
     def is_authorized?(identity_url)
-      session['username'] && identity_url == url_for_user
+      session['username'] && identity_url == user_identity_url
     end
 
     def is_trusted?(trust_root)
       current_user && current_user.approvals_dataset[:trust_root => trust_root]
+    end
+
+    def authenticate!
+      if !session['username']
+        redirect '/login'
+      end
     end
 
     def server
@@ -120,11 +138,11 @@ class Cactuar < Sinatra::Base
           oid_response = oid_request.answer(false)
         elsif session['username']
           # Set identity to currently logged in user
-          identity = url_for_user
+          identity = user_identity_url
         else
           # No user is logged in
           session['last_oid_request'] = oid_request
-          return erb(:login)
+          return erb(:login, :locals => { :login_action => "/openid/login" })
         end
       end
 
@@ -151,7 +169,7 @@ class Cactuar < Sinatra::Base
         else
           # No user is logged in
           session['last_oid_request'] = oid_request
-          return erb(:login)
+          return erb(:login, :locals => { :login_action => "/openid/login" })
         end
       end
     else
@@ -170,7 +188,7 @@ class Cactuar < Sinatra::Base
     if user = User.authenticate(params['username'], params['password'])
       session['username'] = user.username
 
-      identity = url_for_user
+      identity = user_identity_url
       if oid_request.id_select || identity == oid_request.identity
         if is_trusted?(oid_request.trust_root)
           oid_response = finalize_auth(oid_request, identity)
@@ -182,7 +200,7 @@ class Cactuar < Sinatra::Base
         end
       end
     end
-    erb(:login)
+    erb(:login, :locals => {:login_action => "/openid/login"})
   end
 
   post '/openid/decide' do
@@ -194,24 +212,100 @@ class Cactuar < Sinatra::Base
 
     if params[:approve] == 'Yes'
       Approval.create(:user => current_user, :trust_root => oid_request.trust_root)
-      oid_response = finalize_auth(oid_request, url_for_user)
+      oid_response = finalize_auth(oid_request, user_identity_url)
       render_openid_response(oid_response)
     else
       redirect oid_request.cancel_url
     end
   end
 
-  get '/openid/signup' do
-    @user = User.new
-    erb :signup
+  #get '/openid/signup' do
+    #@user = User.new
+    #erb :signup
+  #end
+
+  #post '/openid/signup' do
+    #@user = User.new(params[:user])
+    #if @user.save
+      #redirect url_for("/#{@user.username}")
+    #else
+      #erb :signup
+    #end
+  #end
+
+  get '/login' do
+    erb(:login, :locals => {:login_action => "/login"})
   end
 
-  post '/openid/signup' do
+  post '/login' do
+    if user = User.authenticate(params['username'], params['password'])
+      session['username'] = user.username
+      redirect url_for("/account")
+    else
+      erb(:login, :locals => {:login_action => "/login"})
+    end
+  end
+
+  get '/logout' do
+    session['username'] = nil
+    "You have been logged out."
+  end
+
+  get '/account' do
+    erb(:account)
+  end
+
+  get '/account/edit' do
+    erb(:edit_account)
+  end
+
+  post '/account/edit' do
+    current_user.set_only(params[:user], :current_password, :password, :password_confirmation, :email)
+    if current_user.save
+      redirect url_for('/account')
+    end
+  end
+
+  get '/admin' do
+    redirect url_for('/admin/users')
+  end
+
+  get '/admin/users' do
+    @users = User.all
+    erb(:users)
+  end
+
+  get '/admin/users/new' do
+    @user = User.new
+    erb(:new_user)
+  end
+
+  post '/admin/users' do
     @user = User.new(params[:user])
     if @user.save
-      redirect url_for("/#{@user.username}")
-    else
-      erb :signup
+      Mail.new({
+        :to => @user.email,
+        :from => 'noreply@example.org',
+        :subject => 'New account invitation',
+        :body => erb(:activation_email, :layout => false, :locals => {:user => @user})
+      }).deliver!
+      redirect url_for('/admin/users')
+    end
+  end
+
+  get '/activate/:code' do
+    @user = User.filter({:activation_code => params[:code]}, ~{:activated => true}).first
+    erb(:activate)
+  end
+
+  post '/activate/:code' do
+    @user = User.filter({:activation_code => params[:code]}, ~{:activated => true}).first
+    @user.set_only(params[:user], :password, :password_confirmation)
+    if @user.valid?
+      @user.activated = true
+      @user.save
+      session['username'] = @user.username
+      redirect url_for('/account')
     end
   end
 
@@ -222,11 +316,12 @@ class Cactuar < Sinatra::Base
 
   get '/:username/xrds' do
     @types = [ OpenID::OPENID_2_0_TYPE, OpenID::SREG_URI ]
-    @delegate = url_for_user(params[:username])
+    @delegate = user_identity_url(params[:username])
     content_type("application/xrds+xml")
     erb :xrds, :layout => false
   end
 end
 
+Sequel::Model.plugin :validation_helpers
 require File.dirname(__FILE__) + "/cactuar/user"
 require File.dirname(__FILE__) + "/cactuar/approval"

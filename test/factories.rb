@@ -5,6 +5,7 @@ Factory.define :user, :class => Cactuar::User do |u|
   u.email "dude@example.org"
   u.password "secret"
   u.password_confirmation "secret"
+  u.activated true
 end
 
 Factory.define :approval, :class => Cactuar::Approval do |a|

@@ -1,0 +1,25 @@
+<h1>Activate your account</h1>
+
+<p>Please create a password to activate your account.</p>
+
+<form action="<%= url_for("/activate/#{@user.activation_code}") %>" method="post">
+  <table>
+    <tbody>
+      <tr>
+        <td>Username</td>
+        <td><%= @user.username %></td>
+      </tr>
+      <tr>
+        <td><label for="password">Password</label></td>
+        <td><input id="password" type="password" name="user[password]" /></td>
+      </tr>
+      <tr>
+        <td><label for="password_confirmation">Confirm Password</label></td>
+        <td><input id="password_confirmation" type="password" name="user[password_confirmation]" /></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <input type="submit" value="Submit" />
+  </p>
+</form>

@@ -1,0 +1,21 @@
+<h1>New user</h1>
+
+<form action="<%= url_for('/admin/users') %>" method="post">
+  <p>
+    <label for="username">Username</label><br/>
+    <input id="username" name="user[username]" type="text" value="<%= @user.username %>" />
+  </p>
+  <p>
+    <label for="first_name">First Name</label><br/>
+    <input id="first_name" name="user[first_name]" type="text" value="<%= @user.first_name %>" />
+  </p>
+  <p>
+    <label for="last_name">Last Name</label><br/>
+    <input id="last_name" name="user[last_name]" type="text" value="<%= @user.last_name %>" />
+  </p>
+  <p>
+    <label for="email">E-mail</label><br/>
+    <input id="email" name="user[email]" type="text" value="<%= @user.email %>" />
+  </p>
+  <input type="submit" value="Submit" />
+</form>

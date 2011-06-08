@@ -1,0 +1,8 @@
+<%= user.first_name %>,
+
+A new account has been created for you. Please visit this link in order
+to activate your account:
+
+<%= url_for("/activate/#{user.activation_code}", :full) %>
+
+You will be asked to create a password for this account.

@@ -1,6 +1,6 @@
 require File.dirname(__FILE__) + "/helper"
 
-class CactuarTest < Test::Unit::TestCase
+class TestCactuar < Test::Unit::TestCase
   def test_yadis_initiation
     get '/'
     assert_equal "http://example.org/openid/xrds", last_response["X-XRDS-Location"]
@@ -112,7 +112,7 @@ class CactuarTest < Test::Unit::TestCase
       :id_select => true, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
+    Cactuar.any_instance.expects(:erb).with(:login, :locals => {:login_action => '/openid/login'}).returns("rofl")
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "rofl", last_response.body
@@ -183,7 +183,7 @@ class CactuarTest < Test::Unit::TestCase
       :id_select => false, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
+    Cactuar.any_instance.expects(:erb).with(:login, :locals => {:login_action => '/openid/login'}).returns("rofl")
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
   end
@@ -322,24 +322,24 @@ class CactuarTest < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  def test_signup
-    get '/openid/signup'
-    assert last_response.ok?
-  end
+  #def test_signup
+    #get '/openid/signup'
+    #assert last_response.ok?
+  #end
 
-  def test_successful_signup
-    count = Cactuar::User.count
-    post '/openid/signup', { 'user' => Factory.attributes_for(:user) }
-    assert_equal count + 1, Cactuar::User.count
-    assert last_response.redirect?
-  end
+  #def test_successful_signup
+    #count = Cactuar::User.count
+    #post '/openid/signup', { 'user' => Factory.attributes_for(:user) }
+    #assert_equal count + 1, Cactuar::User.count
+    #assert last_response.redirect?
+  #end
 
-  def test_failed_signup
-    count = Cactuar::User.count
-    post '/openid/signup', { 'user' => Factory.attributes_for(:user, :password => 'foobar') }
-    assert_equal count, Cactuar::User.count
-    assert last_response.ok?
-  end
+  #def test_failed_signup
+    #count = Cactuar::User.count
+    #post '/openid/signup', { 'user' => Factory.attributes_for(:user, :password => 'foobar') }
+    #assert_equal count, Cactuar::User.count
+    #assert last_response.ok?
+  #end
 
   def test_positive_decision
     user = Factory(:user, :username => 'viking')
@@ -369,5 +369,116 @@ class CactuarTest < Test::Unit::TestCase
     assert last_response.redirect?
     assert_equal "http://leetsauce.org", last_response['location']
     assert_equal count, user.approvals_dataset.count
+  end
+
+  def test_normal_login
+    user = Factory(:user, :username => 'viking')
+
+    get '/login'
+    assert last_response.ok?
+
+    post '/login', :username => 'viking', :password => 'secret'
+    assert last_response.redirect?
+    assert_equal "http://example.org/account", last_response['location']
+  end
+
+  def test_failed_normal_login
+    user = Factory(:user, :username => 'viking')
+    post '/login', :username => 'viking', :password => 'wrongpassword'
+    assert last_response.ok?
+  end
+
+  def test_account
+    user = Factory(:user, :username => 'viking')
+    get '/account', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+  end
+
+  def test_account_requires_login
+    get '/account'
+    assert last_response.redirect?
+    assert_equal "http://example.org/login", last_response['location']
+  end
+
+  def test_logout
+    get '/logout', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+  end
+
+  def test_admin
+    user = Factory(:user, :username => 'viking', :admin => true)
+    get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.redirect?
+    assert_equal "http://example.org/admin/users", last_response['location']
+  end
+
+  def test_admin_requires_login
+    get '/admin'
+    assert last_response.redirect?
+    assert_equal "http://example.org/login", last_response['location']
+  end
+
+  def test_admin_requires_administrator
+    user = Factory(:user, :username => 'viking', :admin => false)
+    get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.forbidden?
+  end
+
+  def test_admin_users
+    user = Factory(:user, :username => 'viking', :admin => true)
+    get '/admin/users', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+  end
+
+  def test_admin_new_user
+    user = Factory(:user, :username => 'viking', :admin => true)
+    get '/admin/users/new', {}, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.ok?
+  end
+
+  def test_admin_create_user
+    user = Factory(:user, :username => 'viking', :admin => true)
+    mail = mock('e-mail', :deliver! => nil)
+    Mail.expects(:new).with do |hsh|
+      assert_kind_of String, hsh[:body]
+      assert_equal(
+        {:to => 'foo@example.org', :from => 'noreply@example.org', :subject => 'New account invitation'},
+        hsh.reject { |k, v| k == :body }
+      )
+      true
+    end.returns(mail)
+    post '/admin/users', { :user => { :username => 'foo', :first_name => 'Foo', :last_name => 'Bar', :email => 'foo@example.org' } }, { 'rack.session' => { 'username' => 'viking' } }
+    assert last_response.redirect?
+    assert_equal "http://example.org/admin/users", last_response['location']
+  end
+
+  def test_user_activation_form
+    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    get "/activate/#{user.activation_code}"
+    assert last_response.ok?
+  end
+
+  def test_user_activation
+    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
+    assert last_response.redirect?, "Wasn't redirected"
+    assert_equal "http://example.org/account", last_response['location']
+    user.refresh
+    assert user.activated, "Wasn't activated"
+  end
+
+  def test_account_edit
+    user = Factory(:user, :username => 'viking')
+    get '/account/edit', {}, { 'rack.session' => {'username' => 'viking'} }
+    assert last_response.ok?, "Status wasn't OK, it was #{last_response.status}"
+  end
+
+  def test_successful_account_update
+    user = Factory(:user, :username => 'viking')
+    post '/account/edit', { 'user' => { 'current_password' => 'secret', 'password' => 'foobar', 'password_confirmation' => 'foobar' } }, { 'rack.session' => {'username' => 'viking'} }
+    assert last_response.redirect?
+    assert_equal "http://example.org/account", last_response['location']
+    user.reload
+    assert_equal user.encrypt('foobar'), user.crypted_password
   end
 end

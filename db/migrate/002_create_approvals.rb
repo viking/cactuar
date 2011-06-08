@@ -1,5 +1,5 @@
-class CreateApprovals < Sequel::Migration
-  def up
+Sequel.migration do
+  up do
     create_table :approvals do
       primary_key :id
       String :trust_root
@@ -7,7 +7,7 @@ class CreateApprovals < Sequel::Migration
     end
   end
 
-  def down
+  down do
     drop_table :approvals
   end
 end

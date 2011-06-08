@@ -1,5 +1,5 @@
-class CreateUsers < Sequel::Migration
-  def up
+Sequel.migration do
+  up do
     create_table :users do
       primary_key :id
       String :username
@@ -11,7 +11,7 @@ class CreateUsers < Sequel::Migration
     end
   end
 
-  def down
+  down do
     drop_table :users
   end
 end
