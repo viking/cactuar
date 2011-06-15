@@ -1,4 +1,33 @@
+<style type="text/css">
+.errors {
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border: 2px solid red;
+  background: #eee;
+  float: left;
+  margin-bottom: 1em;
+}
+.errors h3 {
+  font-size: 1.1em;
+  background-color: red;
+  color: white;
+  margin: 0;
+  padding: 0.3em;
+  border: 0;
+}
+.errors ul {
+  padding: 0.5em;
+  margin-bottom: 0;
+  list-style-type: square;
+}
+.errors li {
+  margin-left: 1.5em;
+}
+</style>
+
 <h1>Activate your account</h1>
+
+<%= error_messages_for @user %>
 
 <p>Please create a password to activate your account.</p>
 

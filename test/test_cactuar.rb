@@ -467,6 +467,12 @@ class TestCactuar < Test::Unit::TestCase
     assert user.activated, "Wasn't activated"
   end
 
+  def test_failed_user_activation
+    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "junkbar" } }
+    assert last_response.ok?
+  end
+
   def test_account_edit
     user = Factory(:user, :username => 'viking')
     get '/account/edit', {}, { 'rack.session' => {'username' => 'viking'} }
