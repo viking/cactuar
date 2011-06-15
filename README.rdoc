@@ -15,4 +15,4 @@ Cactuar is an Open ID Provider written in Sinatra
 
 == Copyright
 
-Copyright (c) 2010 Vanderbilt University. See LICENSE for details.
+Copyright (c) 2010-2011 Vanderbilt University. See LICENSE for details.
