@@ -72,5 +72,10 @@ class Cactuar
           self.crypted_password = encrypt(password)
         end
       end
+
+      def after_destroy
+        super
+        approvals_dataset.each { |a| a.destroy }
+      end
   end
 end

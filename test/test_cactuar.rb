@@ -487,4 +487,21 @@ class TestCactuar < Test::Unit::TestCase
     user.reload
     assert_equal user.encrypt('foobar'), user.crypted_password
   end
+
+  def test_delete_user
+    user = Factory(:user, :username => 'viking', :admin => true)
+    user_2 = Factory(:user)
+    delete "/admin/users/#{user_2.id}", {}, { 'rack.session' => {'username' => 'viking'} }
+    assert last_response.redirect?
+    assert_equal "http://example.org/admin/users", last_response['location']
+    assert_equal 0, Cactuar::User.filter(:id => user_2.id).count, "User wasn't deleted"
+  end
+
+  def test_cant_delete_self
+    user = Factory(:user, :username => 'viking', :admin => true)
+    delete "/admin/users/#{user.id}", {}, { 'rack.session' => {'username' => 'viking'} }
+    assert last_response.redirect?
+    assert_equal "http://example.org/admin/users", last_response['location']
+    assert_equal 1, Cactuar::User.filter(:id => user.id).count, "User was deleted"
+  end
 end

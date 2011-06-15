@@ -136,5 +136,12 @@ class Cactuar
       user = Factory(:user)
       assert_match /^[\da-z]{10}$/, user.activation_code
     end
+
+    def test_deletes_approvals_on_destroy
+      user = Factory(:user)
+      approval = Factory(:approval, :user => user)
+      user.destroy
+      assert Approval[:id => approval.id].nil?, "Approval wasn't destroyed"
+    end
   end
 end

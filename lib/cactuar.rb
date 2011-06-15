@@ -20,6 +20,7 @@ class Cactuar < Sinatra::Base
   set :root,   File.join(File.dirname(__FILE__), '..')
   set :public, File.join(File.dirname(__FILE__), '..', 'public')
   set :views,  File.join(File.dirname(__FILE__), '..', 'views')
+  set :methodoverride, true
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
     File.expand_path(File.dirname(__FILE__) + '/..'),
@@ -61,6 +62,7 @@ class Cactuar < Sinatra::Base
 
     def authenticate!
       if !session['username']
+        session['return_to'] = request.fullpath
         redirect url_for('/login')
       end
     end
@@ -124,6 +126,10 @@ class Cactuar < Sinatra::Base
       retval += "</ul></div><div class='clear'></div>"
 
       retval
+    end
+
+    def delete_link(text, url)
+      %^<a href="#{url}" onclick="if (confirm('Are you sure?')) { var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = this.href; var m = document.createElement('input'); m.setAttribute('type', 'hidden'); m.setAttribute('name', '_method'); m.setAttribute('value', 'delete'); f.appendChild(m); f.submit(); }; return false;">#{text}</a>^
     end
   end
 
@@ -256,7 +262,12 @@ class Cactuar < Sinatra::Base
   post '/login' do
     if user = User.authenticate(params['username'], params['password'])
       session['username'] = user.username
-      redirect url_for("/account")
+      url = url_for("/account")
+      if session['return_to']
+        url = session['return_to']
+        session['return_to'] = nil
+      end
+      redirect url
     else
       erb(:login, :locals => {:login_action => "/login"})
     end
@@ -309,6 +320,12 @@ class Cactuar < Sinatra::Base
       }).deliver!
       redirect url_for('/admin/users')
     end
+  end
+
+  delete '/admin/users/:id' do
+    @user = User[:id => params[:id]]
+    @user.destroy if @user && @user.id != current_user.id
+    redirect url_for('/admin/users')
   end
 
   get '/activate/:code' do
