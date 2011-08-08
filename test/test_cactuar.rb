@@ -461,8 +461,7 @@ class TestCactuar < Test::Unit::TestCase
   def test_user_activation
     user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
     post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
-    assert last_response.redirect?, "Wasn't redirected"
-    assert_equal "http://example.org/account", last_response['location']
+    assert last_response.ok?
     user.refresh
     assert user.activated, "Wasn't activated"
   end

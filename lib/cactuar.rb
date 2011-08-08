@@ -340,7 +340,7 @@ class Cactuar < Sinatra::Base
       @user.activated = true
       @user.save
       session['username'] = @user.username
-      redirect url_for('/account')
+      erb(:activated)
     else
       erb(:activate)
     end
