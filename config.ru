@@ -3,5 +3,5 @@ require 'bundler'
 
 Bundler.require
 
-require 'lib/cactuar'
+require './lib/cactuar'
 Cactuar.run!

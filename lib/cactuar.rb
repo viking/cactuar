@@ -13,8 +13,7 @@ class Cactuar < Sinatra::Base
   helpers Sinatra::UrlForHelper
   register Sinatra::StaticAssets
 
-  enable :sessions
-  set :sessions, true
+  use Rack::Session::Cookie, :secret => session_secret, :key => 'cactuar.session'
   set :logging, true
   set :erb, :trim => '-'
   set :root,   File.join(File.dirname(__FILE__), '..')

@@ -1,4 +1,4 @@
-require File.dirname(__FILE__) + "/helper"
+require "helper"
 
 class TestCactuar < Test::Unit::TestCase
   def test_yadis_initiation

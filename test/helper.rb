@@ -12,7 +12,11 @@ ENV['RACK_ENV'] = 'test'
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'cactuar'
 
-Cactuar.set(:sessions, false) # workaround
+class Rack::Session::Cookie
+  def call(env)
+    @app.call(env)
+  end
+end
 
 class Test::Unit::TestCase
   include Rack::Test::Methods
