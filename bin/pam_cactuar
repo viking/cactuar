@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+# PAM authenticator using pam_exec
+
+require 'rubygems'
+require 'bundler'
+
+Bundler.require
+require File.join(File.dirname(__FILE__), "..", "lib", "cactuar")
+
+user = ENV['PAM_USER']
+password = $stdin.read
+
+PAM_SUCCESS = 0  # Successful function return
+PAM_AUTH_ERR = 7 # Authentication failure
+
+if Cactuar::User.authenticate(user, password)
+  exit(PAM_SUCCESS)
+else
+  exit(PAM_AUTH_ERR)
+end
