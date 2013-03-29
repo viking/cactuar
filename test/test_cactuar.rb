@@ -119,8 +119,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_successful_checkid_setup_with_id_select
-    user = Factory(:user, :username => "viking")
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => "viking")
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup(true)
     @oid_request.stubs({
@@ -148,8 +148,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_successful_checkid_immediate_without_id_select
-    user = Factory(:user, :username => "viking")
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => "viking")
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup(true)
     @oid_request.stubs({
@@ -189,8 +189,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_successful_login_with_id_select
-    user = Factory(:user, :username => 'viking')
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => 'viking')
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -202,8 +202,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_successful_login_without_id_select
-    user = Factory(:user, :username => 'viking')
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => 'viking')
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -215,7 +215,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_failed_login
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.build(:user, :username => 'viking')
     oid_request = stub('oid request')
 
     post '/openid/login', { 'username' => 'viking', 'password' => 'wrong' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
@@ -224,7 +224,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_cancelled_login
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.build(:user, :username => 'viking')
     oid_request = stub('oid request', :cancel_url => "http://leetsauce.org")
 
     post '/openid/login', { 'cancel' => 'Cancel' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
@@ -233,7 +233,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_correct_login_for_wrong_identifier
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.build(:user, :username => 'viking')
     oid_request = stub('oid request', {
       :identity => 'http://example.org/monkey', :id_select => false
     })
@@ -244,7 +244,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_logged_in_but_untrusted_root_with_immediate
-    user = Factory(:user, :username => "viking")
+    user = FactoryGirl.build(:user, :username => "viking")
     openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
@@ -258,7 +258,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_logged_in_but_untrusted_root_without_immediate
-    user = Factory(:user, :username => "viking")
+    user = FactoryGirl.create(:user, :username => "viking")
     openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
@@ -271,7 +271,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_not_logged_in_with_untrusted_root
-    user = Factory(:user, :username => "viking")
+    user = FactoryGirl.create(:user, :username => "viking")
 
     openid_server_setup
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
@@ -282,8 +282,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_simple_registration_from_auth
-    user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup(true)
     @oid_request.stubs({
@@ -304,8 +304,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_simple_registration_from_login
-    user = Factory(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
-    approval = Factory(:approval, :user => user)
+    user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
+    approval = FactoryGirl.create(:approval, :user => user)
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -329,20 +329,20 @@ class TestCactuar < Test::Unit::TestCase
 
   #def test_successful_signup
     #count = Cactuar::User.count
-    #post '/openid/signup', { 'user' => Factory.attributes_for(:user) }
+    #post '/openid/signup', { 'user' => FactoryGirl.attributes_for(:user) }
     #assert_equal count + 1, Cactuar::User.count
     #assert last_response.redirect?
   #end
 
   #def test_failed_signup
     #count = Cactuar::User.count
-    #post '/openid/signup', { 'user' => Factory.attributes_for(:user, :password => 'foobar') }
+    #post '/openid/signup', { 'user' => FactoryGirl.attributes_for(:user, :password => 'foobar') }
     #assert_equal count, Cactuar::User.count
     #assert last_response.ok?
   #end
 
   def test_positive_decision
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.create(:user, :username => 'viking')
 
     openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -356,7 +356,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_negative_decision
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.create(:user, :username => 'viking')
 
     openid_server_setup
     @oid_request.stubs({
@@ -372,7 +372,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_normal_login
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.create(:user, :username => 'viking')
 
     get '/login'
     assert last_response.ok?
@@ -383,13 +383,13 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_failed_normal_login
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.build(:user, :username => 'viking')
     post '/login', :username => 'viking', :password => 'wrongpassword'
     assert last_response.ok?
   end
 
   def test_account
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.build(:user, :username => 'viking')
     get '/account', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
@@ -406,7 +406,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_admin
-    user = Factory(:user, :username => 'viking', :admin => true)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
     get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
@@ -419,25 +419,25 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_admin_requires_administrator
-    user = Factory(:user, :username => 'viking', :admin => false)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => false)
     get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.forbidden?
   end
 
   def test_admin_users
-    user = Factory(:user, :username => 'viking', :admin => true)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
     get '/admin/users', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
 
   def test_admin_new_user
-    user = Factory(:user, :username => 'viking', :admin => true)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
     get '/admin/users/new', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
 
   def test_admin_create_user
-    user = Factory(:user, :username => 'viking', :admin => true)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
     mail = mock('e-mail', :deliver! => nil)
     Mail.expects(:new).with do |hsh|
       assert_kind_of String, hsh[:body]
@@ -453,13 +453,13 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_user_activation_form
-    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
     get "/activate/#{user.activation_code}"
     assert last_response.ok?
   end
 
   def test_user_activation
-    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
     post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
     assert last_response.ok?
     user.refresh
@@ -467,19 +467,19 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_failed_user_activation
-    user = Factory(:user, :username => 'viking', :password => nil, :activated => false)
+    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
     post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "junkbar" } }
     assert last_response.ok?
   end
 
   def test_account_edit
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.create(:user, :username => 'viking')
     get '/account/edit', {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.ok?, "Status wasn't OK, it was #{last_response.status}"
   end
 
   def test_successful_account_update
-    user = Factory(:user, :username => 'viking')
+    user = FactoryGirl.create(:user, :username => 'viking')
     post '/account/edit', { 'user' => { 'current_password' => 'secret', 'password' => 'foobar', 'password_confirmation' => 'foobar' } }, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/account", last_response['location']
@@ -488,8 +488,8 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_delete_user
-    user = Factory(:user, :username => 'viking', :admin => true)
-    user_2 = Factory(:user)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
+    user_2 = FactoryGirl.create(:user)
     delete "/admin/users/#{user_2.id}", {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
@@ -497,7 +497,7 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   def test_cant_delete_self
-    user = Factory(:user, :username => 'viking', :admin => true)
+    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
     delete "/admin/users/#{user.id}", {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']

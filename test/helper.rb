@@ -5,7 +5,7 @@ Bundler.setup(:default, :development)
 require 'test/unit'
 require 'rack/test'
 require 'nokogiri'
-require 'mocha'
+require 'mocha/setup'
 require 'factory_girl'
 
 ENV['RACK_ENV'] = 'test'
@@ -37,4 +37,4 @@ class Test::Unit::TestCase
   end
 end
 
-Factory.find_definitions
+FactoryGirl.find_definitions

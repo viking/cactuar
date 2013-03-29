@@ -6,7 +6,6 @@ require 'openid/store/filesystem'
 require 'openid/extensions/sreg'
 require 'sequel'
 require 'digest/md5'
-require 'rack-flash'
 require 'mail'
 
 class Cactuar < Sinatra::Base
@@ -17,7 +16,7 @@ class Cactuar < Sinatra::Base
   set :logging, true
   set :erb, :trim => '-'
   set :root,   File.join(File.dirname(__FILE__), '..')
-  set :public, File.join(File.dirname(__FILE__), '..', 'public')
+  set :public_dir, File.join(File.dirname(__FILE__), '..', 'public')
   set :views,  File.join(File.dirname(__FILE__), '..', 'views')
   set :methodoverride, true
 
