@@ -162,8 +162,8 @@ class Cactuar < Sinatra::Base
           identity = user_identity_url
         else
           # No user is logged in
-          session['last_oid_request'] = oid_request
-          return erb(:login, :locals => { :login_action => "/openid/login" })
+          session['oid_request'] = oid_request
+          return erb(:login)
         end
       end
 
@@ -179,7 +179,7 @@ class Cactuar < Sinatra::Base
             if oid_request.immediate
               oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
             else
-              session['last_oid_request'] = oid_request
+              session['oid_request'] = oid_request
               @trust_root = oid_request.trust_root
               return erb(:decide)
             end
@@ -189,8 +189,8 @@ class Cactuar < Sinatra::Base
           oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
         else
           # No user is logged in
-          session['last_oid_request'] = oid_request
-          return erb(:login, :locals => { :login_action => "/openid/login" })
+          session['oid_request'] = oid_request
+          return erb(:login)
         end
       end
     else
@@ -200,37 +200,12 @@ class Cactuar < Sinatra::Base
     render_openid_response(oid_response)
   end
 
-  post '/openid/login' do
-    oid_request = session['last_oid_request']
-    if params['cancel']
-      return redirect(oid_request.cancel_url)
-    end
-
-    if user = User.authenticate(params['username'], params['password'])
-      session['username'] = user.username
-
-      identity = user_identity_url
-      if oid_request.id_select || identity == oid_request.identity
-        if is_trusted?(oid_request.trust_root)
-          oid_response = finalize_auth(oid_request, identity)
-          return render_openid_response(oid_response)
-        else
-          session['last_oid_request'] = oid_request
-          @trust_root = oid_request.trust_root
-          return erb(:decide)
-        end
-      end
-    end
-    erb(:login, :locals => {:login_action => "/openid/login"})
-  end
-
   post '/openid/decide' do
     if !current_user
       return redirect(url_for('/'))
     end
 
-    oid_request = session['last_oid_request']
-
+    oid_request = session.delete('oid_request')
     if params[:approve] == 'Yes'
       Approval.create(:user => current_user, :trust_root => oid_request.trust_root)
       oid_response = finalize_auth(oid_request, user_identity_url)
@@ -259,21 +234,45 @@ class Cactuar < Sinatra::Base
   end
 
   post '/login' do
+    # If oid_request is non-nil, it means we're trying to login as a result
+    # of an OpenID authentication request instead of a direct login attempt
+    oid_request = session.delete('oid_request')
+    if params['cancel']
+      cancel_url = oid_request ? oid_request.cancel_url : url_for("/")
+      return redirect(cancel_url)
+    end
+
     if user = User.authenticate(params['username'], params['password'])
       session['username'] = user.username
-      url = url_for("/account")
-      if session['return_to']
-        url = session['return_to']
-        session['return_to'] = nil
+
+      if oid_request
+        identity = user_identity_url
+        if oid_request.id_select || identity == oid_request.identity
+          if is_trusted?(oid_request.trust_root)
+            oid_response = finalize_auth(oid_request, identity)
+            return render_openid_response(oid_response)
+          else
+            session['oid_request'] = oid_request
+            @trust_root = oid_request.trust_root
+            return erb(:decide)
+          end
+        end
+      else
+        # Normal login attempt
+        url = url_for("/account")
+        if session['return_to']
+          url = session['return_to']
+          session['return_to'] = nil
+        end
+        redirect url
       end
-      redirect url
     else
-      erb(:login, :locals => {:login_action => "/login"})
+      erb(:login)
     end
   end
 
   get '/logout' do
-    session['username'] = nil
+    session.delete('username')
     "You have been logged out."
   end
 

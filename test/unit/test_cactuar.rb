@@ -112,7 +112,7 @@ class TestCactuar < Test::Unit::TestCase
       :id_select => true, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login, :locals => {:login_action => '/openid/login'}).returns("rofl")
+    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "rofl", last_response.body
@@ -183,7 +183,7 @@ class TestCactuar < Test::Unit::TestCase
       :id_select => false, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login, :locals => {:login_action => '/openid/login'}).returns("rofl")
+    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
   end
@@ -195,7 +195,7 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => nil, :id_select => true })
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
@@ -207,7 +207,7 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
@@ -216,7 +216,7 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.build(:user, :username => 'viking')
     oid_request = stub('oid request')
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'wrong' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'wrong' }, { 'rack.session' => { 'oid_request' => oid_request } }
     assert last_response.ok?
     assert_match %r{<h1>Login</h1>}, last_response.body
   end
@@ -225,7 +225,7 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.build(:user, :username => 'viking')
     oid_request = stub('oid request', :cancel_url => "http://leetsauce.org")
 
-    post '/openid/login', { 'cancel' => 'Cancel' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    post '/login', { 'cancel' => 'Cancel' }, { 'rack.session' => { 'oid_request' => oid_request } }
     assert last_response.redirect?
     assert_equal "http://leetsauce.org", last_response['location']
   end
@@ -236,7 +236,7 @@ class TestCactuar < Test::Unit::TestCase
       :identity => 'http://example.org/monkey', :id_select => false
     })
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => oid_request } }
     assert last_response.ok?
     assert_match %r{<h1>Login</h1>}, last_response.body
   end
@@ -273,7 +273,7 @@ class TestCactuar < Test::Unit::TestCase
 
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
     assert last_response.ok?
     assert_match /trust/, last_response.body
   end
@@ -313,7 +313,7 @@ class TestCactuar < Test::Unit::TestCase
     OpenID::SReg::Response.expects(:extract_response).with(sreg_request, { 'fullname' => "Jeremy Stephens", 'email' => 'test@example.com' }).returns(sreg_response)
     @oid_response.expects(:add_extension).with(sreg_response)
 
-    post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
+    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
@@ -344,7 +344,7 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
     count = user.approvals_dataset.count
-    post '/openid/decide', { 'approve' => 'Yes' }, { 'rack.session' => { 'last_oid_request' => @oid_request, 'username' => 'viking' } }
+    post '/openid/decide', { 'approve' => 'Yes' }, { 'rack.session' => { 'oid_request' => @oid_request, 'username' => 'viking' } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
     assert_equal count + 1, user.approvals_dataset.count
@@ -359,7 +359,7 @@ class TestCactuar < Test::Unit::TestCase
     })
 
     count = user.approvals_dataset.count
-    post '/openid/decide', { 'approve' => 'No' }, { 'rack.session' => { 'last_oid_request' => @oid_request, 'username' => 'viking' } }
+    post '/openid/decide', { 'approve' => 'No' }, { 'rack.session' => { 'oid_request' => @oid_request, 'username' => 'viking' } }
     assert last_response.redirect?
     assert_equal "http://leetsauce.org", last_response['location']
     assert_equal count, user.approvals_dataset.count
