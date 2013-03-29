@@ -318,24 +318,24 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  #def test_signup
-    #get '/openid/signup'
-    #assert last_response.ok?
-  #end
+  test "signup" do
+    get '/signup'
+    assert last_response.ok?
+  end
 
-  #def test_successful_signup
-    #count = Cactuar::User.count
-    #post '/openid/signup', { 'user' => FactoryGirl.attributes_for(:user) }
-    #assert_equal count + 1, Cactuar::User.count
-    #assert last_response.redirect?
-  #end
+  test "successful signup" do
+    count = Cactuar::User.count
+    post '/signup', { 'user' => FactoryGirl.attributes_for(:user) }
+    assert_equal count + 1, Cactuar::User.count
+    assert last_response.redirect?
+  end
 
-  #def test_failed_signup
-    #count = Cactuar::User.count
-    #post '/openid/signup', { 'user' => FactoryGirl.attributes_for(:user, :password => 'foobar') }
-    #assert_equal count, Cactuar::User.count
-    #assert last_response.ok?
-  #end
+  test "failed signup" do
+    count = Cactuar::User.count
+    post '/signup', { 'user' => FactoryGirl.attributes_for(:user, :password => 'foobar') }
+    assert_equal count, Cactuar::User.count
+    assert last_response.ok?
+  end
 
   test "positive decision" do
     user = FactoryGirl.create(:user, :username => 'viking')
