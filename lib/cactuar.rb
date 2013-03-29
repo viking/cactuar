@@ -146,7 +146,8 @@ class Cactuar < Sinatra::Base
     oid_request = server.decode_request(params)
 
     oid_response = nil
-    if oid_request.is_a?(OpenID::Server::CheckIDRequest)
+    case oid_request.mode
+    when "checkid_setup", "checkid_immediate"
       identity = oid_request.identity
 
       if oid_request.id_select
@@ -239,19 +240,19 @@ class Cactuar < Sinatra::Base
     end
   end
 
-  #get '/openid/signup' do
-    #@user = User.new
-    #erb :signup
-  #end
+  get '/signup' do
+    @user = User.new
+    erb :signup
+  end
 
-  #post '/openid/signup' do
-    #@user = User.new(params[:user])
-    #if @user.save
-      #redirect url_for("/#{@user.username}")
-    #else
-      #erb :signup
-    #end
-  #end
+  post '/signup' do
+    @user = User.new(params[:user])
+    if @user.save
+      redirect url_for("/#{@user.username}")
+    else
+      erb :signup
+    end
+  end
 
   get '/login' do
     erb(:login, :locals => {:login_action => "/login"})

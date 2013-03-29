@@ -7,6 +7,24 @@ class TestCactuar < Test::Unit::TestCase
     Cactuar
   end
 
+  def setup
+    @store = stub("filesystem store")
+    OpenID::Store::Filesystem.stubs(:new).with() do |path|
+      assert_equal File.expand_path(File.dirname(__FILE__) + "/../../data"), path.realpath.to_s
+      true
+    end.returns(@store)
+
+    @oid_request = stub("openid request", :mode => "", :trust_root => "http://leetsauce.org")
+    @oid_response = stub("openid response", :needs_signing => false)
+    @web_response = stub("web response", :body => "blargh", :code => 200)
+    @server = stub("server")
+    @server.stubs(:decode_request).with('foo' => 'bar').returns(@oid_request)
+    @server.stubs(:handle_request).with(@oid_request).returns(@oid_response)
+    @server.stubs(:encode_response).with(@oid_response).returns(@web_response)
+    OpenID::Server::Server.stubs(:new).with(@store, "http://example.org/openid/auth").returns(@server)
+    OpenID::SReg::Request.stubs(:from_openid_request).returns(nil)
+  end
+
   test "yadis initiation" do
     get '/'
     assert_equal "http://example.org/openid/xrds", last_response["X-XRDS-Location"]
@@ -51,35 +69,13 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "http://example.org/openid/auth", uri.inner_html
   end
 
-  # I don't really like mocking the crap out of things
-  def openid_server_setup(check_id_request = false)
-    @store = stub("filesystem store")
-    OpenID::Store::Filesystem.stubs(:new).with() do |path|
-      assert_equal File.expand_path(File.dirname(__FILE__) + "/../../data"), path.realpath.to_s
-      true
-    end.returns(@store)
-
-    @oid_request = stub("openid request", :trust_root => "http://leetsauce.org")
-    @oid_request.stubs(:is_a?).with(OpenID::Server::CheckIDRequest).returns(check_id_request)
-    @oid_response = stub("openid response", :needs_signing => false)
-    @web_response = stub("web response", :body => "blargh", :code => 200)
-    @server = stub("server")
-    @server.stubs(:decode_request).with('foo' => 'bar').returns(@oid_request)
-    @server.stubs(:handle_request).with(@oid_request).returns(@oid_response)
-    @server.stubs(:encode_response).with(@oid_response).returns(@web_response)
-    OpenID::Server::Server.stubs(:new).with(@store, "http://example.org/openid/auth").returns(@server)
-    OpenID::SReg::Request.stubs(:from_openid_request).returns(nil)
-  end
-
   test "non check id request" do
-    openid_server_setup
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
   test "redirect from non check id request" do
-    openid_server_setup
     @web_response.stubs(:code).returns(302)
     @web_response.stubs(:headers).returns({'location' => 'http://ninjas.com'})
 
@@ -89,7 +85,6 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   test "failure from non check id request" do
-    openid_server_setup
     @web_response.stubs(:code).returns(400)
 
     get '/openid/auth', :foo => "bar"
@@ -98,7 +93,6 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   #def test_non_check_id_request_signing
-    #openid_server_setup
     #@oid_response.stubs(:needs_signing).returns(true)
     #signed_response = mock("signed response")
     #signatory = mock("signatory")
@@ -111,10 +105,10 @@ class TestCactuar < Test::Unit::TestCase
     #assert_equal "blargh", last_response.body
   #end
 
-  test "failed checkid setup with id select" do
-    openid_server_setup(true)
+  test "failed checkid_setup with id select" do
     @oid_request.stubs({
       :identity => "http://example.org",
+      :mode => "checkid_setup",
       :id_select => true, :immediate => false
     })
 
@@ -124,13 +118,13 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "rofl", last_response.body
   end
 
-  test "successful checkid setup with id select" do
+  test "successful checkid_setup with id select" do
     user = FactoryGirl.create(:user, :username => "viking")
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org",
+      :mode => "checkid_setup",
       :id_select => true, :immediate => false
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -140,10 +134,10 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  test "checkid immediate with id select fails" do
-    openid_server_setup(true)
+  test "checkid_immediate with id select fails" do
     @oid_request.stubs({
       :identity => "http://example.org",
+      :mode => "checkid_immediate",
       :id_select => true, :immediate => true
     })
     @oid_request.expects(:answer).with(false).returns(@oid_response)
@@ -153,13 +147,13 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  test "successful checkid immediate without id select" do
+  test "successful checkid_immediate without id select" do
     user = FactoryGirl.create(:user, :username => "viking")
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_immediate",
       :id_select => false, :immediate => true
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -169,10 +163,10 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  test "failed checkid immediate without id select" do
-    openid_server_setup(true)
+  test "failed checkid_immediate without id select" do
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_immediate",
       :id_select => false, :immediate => true
     })
     @oid_request.expects(:answer).with(false, "http://example.org/openid/auth").returns(@oid_response)
@@ -182,10 +176,10 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "blargh", last_response.body
   end
 
-  test "failed checkid setup without id select" do
-    openid_server_setup(true)
+  test "failed checkid_setup without id select" do
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_setup",
       :id_select => false, :immediate => false
     })
 
@@ -198,7 +192,6 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.create(:user, :username => 'viking')
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => nil, :id_select => true })
 
@@ -211,7 +204,6 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.create(:user, :username => 'viking')
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
@@ -251,9 +243,9 @@ class TestCactuar < Test::Unit::TestCase
 
   test "logged in but untrusted root with immediate" do
     user = FactoryGirl.build(:user, :username => "viking")
-    openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_immediate",
       :id_select => false, :immediate => true
     })
     @oid_request.expects(:answer).with(false, "http://example.org/openid/auth").returns(@oid_response)
@@ -265,9 +257,9 @@ class TestCactuar < Test::Unit::TestCase
 
   test "logged in but untrusted root without immediate" do
     user = FactoryGirl.create(:user, :username => "viking")
-    openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_setup",
       :id_select => false, :immediate => false
     })
 
@@ -279,7 +271,6 @@ class TestCactuar < Test::Unit::TestCase
   test "not logged in with untrusted root" do
     user = FactoryGirl.create(:user, :username => "viking")
 
-    openid_server_setup
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
     post '/openid/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'last_oid_request' => @oid_request } }
@@ -291,9 +282,9 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup(true)
     @oid_request.stubs({
       :identity => "http://example.org/viking",
+      :mode => "checkid_immediate",
       :id_select => false, :immediate => true
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
@@ -313,7 +304,6 @@ class TestCactuar < Test::Unit::TestCase
     user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
     approval = FactoryGirl.create(:approval, :user => user)
 
-    openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
@@ -350,7 +340,6 @@ class TestCactuar < Test::Unit::TestCase
   test "positive decision" do
     user = FactoryGirl.create(:user, :username => 'viking')
 
-    openid_server_setup
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
@@ -364,7 +353,6 @@ class TestCactuar < Test::Unit::TestCase
   test "negative decision" do
     user = FactoryGirl.create(:user, :username => 'viking')
 
-    openid_server_setup
     @oid_request.stubs({
       :identity => "http://example.org/viking", :id_select => false,
       :cancel_url => "http://leetsauce.org"
