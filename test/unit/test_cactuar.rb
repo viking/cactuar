@@ -1,6 +1,12 @@
 require "helper"
 
 class TestCactuar < Test::Unit::TestCase
+  include Rack::Test::Methods
+
+  def app
+    Cactuar
+  end
+
   def test_yadis_initiation
     get '/'
     assert_equal "http://example.org/openid/xrds", last_response["X-XRDS-Location"]
@@ -49,7 +55,7 @@ class TestCactuar < Test::Unit::TestCase
   def openid_server_setup(check_id_request = false)
     @store = stub("filesystem store")
     OpenID::Store::Filesystem.stubs(:new).with() do |path|
-      assert_equal File.expand_path(File.dirname(__FILE__) + "/../data"), path.realpath.to_s
+      assert_equal File.expand_path(File.dirname(__FILE__) + "/../../data"), path.realpath.to_s
       true
     end.returns(@store)
 

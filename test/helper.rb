@@ -4,8 +4,8 @@ Bundler.setup(:default, :development)
 
 require 'test/unit'
 require 'rack/test'
-require 'nokogiri'
 require 'mocha/setup'
+require 'nokogiri'
 require 'factory_girl'
 
 ENV['RACK_ENV'] = 'test'
@@ -19,21 +19,14 @@ class Rack::Session::Cookie
 end
 
 class Test::Unit::TestCase
-  include Rack::Test::Methods
+  alias_method :run_without_transactions, :run
 
-  def app
-    Cactuar
-  end
-
-  def last_html_doc
-    Nokogiri.HTML(last_response.body)
-  end
-
-  def teardown
-    db = Cactuar::Database
-    db.tables.each do |name|
-      db[name].delete
+  def run(*args, &block)
+    result = nil
+    Cactuar::Database.transaction(:rollback => :always) do
+      result = run_without_transactions(*args, &block)
     end
+    result
   end
 end
 
