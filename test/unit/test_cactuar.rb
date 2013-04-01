@@ -18,10 +18,10 @@ class TestCactuar < Test::Unit::TestCase
     @oid_response = stub("openid response", :needs_signing => false)
     @web_response = stub("web response", :body => "blargh", :code => 200)
     @server = stub("server")
-    @server.stubs(:decode_request).with('foo' => 'bar').returns(@oid_request)
-    @server.stubs(:handle_request).with(@oid_request).returns(@oid_response)
-    @server.stubs(:encode_response).with(@oid_response).returns(@web_response)
-    OpenID::Server::Server.stubs(:new).with(@store, "http://example.org/openid/auth").returns(@server)
+    @server.stubs(:decode_request).returns(@oid_request)
+    @server.stubs(:handle_request).returns(@oid_response)
+    @server.stubs(:encode_response).returns(@web_response)
+    OpenID::Server::Server.stubs(:new).returns(@server)
     OpenID::SReg::Request.stubs(:from_openid_request).returns(nil)
   end
 
@@ -69,23 +69,24 @@ class TestCactuar < Test::Unit::TestCase
     assert_equal "http://example.org/openid/auth", uri.inner_html
   end
 
-  test "non check id request" do
+  test "non-checkid request is handled by server object" do
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "redirect from non check id request" do
-    @web_response.stubs(:code).returns(302)
-    @web_response.stubs(:headers).returns({'location' => 'http://ninjas.com'})
+  test "redirecting from server object response" do
+    @web_response.expects(:code).returns(302)
+    @web_response.expects(:headers).returns({'location' => 'http://ninjas.com'})
 
     get '/openid/auth', :foo => "bar"
     assert last_response.redirect?
     assert_equal "http://ninjas.com", last_response['location']
   end
 
-  test "failure from non check id request" do
-    @web_response.stubs(:code).returns(400)
+  test "failure from server object response" do
+    @web_response.expects(:code).returns(400)
 
     get '/openid/auth', :foo => "bar"
     assert_equal 400, last_response.status
@@ -105,22 +106,26 @@ class TestCactuar < Test::Unit::TestCase
     #assert_equal "blargh", last_response.body
   #end
 
-  test "failed checkid_setup with id select" do
+  test "checkid_setup request with id select when not logged in redirects to login" do
     @oid_request.stubs({
       :identity => "http://example.org",
       :mode => "checkid_setup",
       :id_select => true, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
     get '/openid/auth', :foo => "bar"
-    assert last_response.ok?
-    assert_equal "rofl", last_response.body
+    assert last_response.redirect?
+    assert_equal "http://example.org/auth/identity", last_response['location']
   end
 
-  test "successful checkid_setup with id select" do
-    user = FactoryGirl.create(:user, :username => "viking")
-    approval = FactoryGirl.create(:approval, :user => user)
+  test "checkid_setup request with id select when logged in and approved is handled by server object" do
+    user = stub('user')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
+    approval = stub('approval')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(approval)
+    })
 
     @oid_request.stubs({
       :identity => "http://example.org",
@@ -129,12 +134,13 @@ class TestCactuar < Test::Unit::TestCase
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
 
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', { 'foo' => "bar" }, { 'rack.session' => { 'username' => "viking" } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "checkid_immediate with id select fails" do
+  test "checkid_immediate request with id select when not logged in is handled by the server object" do
     @oid_request.stubs({
       :identity => "http://example.org",
       :mode => "checkid_immediate",
@@ -142,14 +148,20 @@ class TestCactuar < Test::Unit::TestCase
     })
     @oid_request.expects(:answer).with(false).returns(@oid_response)
 
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "successful checkid_immediate without id select" do
-    user = FactoryGirl.create(:user, :username => "viking")
-    approval = FactoryGirl.create(:approval, :user => user)
+  test "checkid_immediate request without id select when logged in and approved is handled by the server object" do
+    user = stub('user')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
+    approval = stub('approval')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(approval)
+    })
 
     @oid_request.stubs({
       :identity => "http://example.org/viking",
@@ -158,12 +170,13 @@ class TestCactuar < Test::Unit::TestCase
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
 
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "failed checkid_immediate without id select" do
+  test "checkid_immediate request without id select when not logged in is handled by the server object" do
     @oid_request.stubs({
       :identity => "http://example.org/viking",
       :mode => "checkid_immediate",
@@ -171,116 +184,166 @@ class TestCactuar < Test::Unit::TestCase
     })
     @oid_request.expects(:answer).with(false, "http://example.org/openid/auth").returns(@oid_response)
 
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', :foo => "bar"
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "failed checkid_setup without id select" do
+  test "checkid_setup request without id select when not logged in is redirected to login" do
     @oid_request.stubs({
       :identity => "http://example.org/viking",
       :mode => "checkid_setup",
       :id_select => false, :immediate => false
     })
 
-    Cactuar.any_instance.expects(:erb).with(:login).returns("rofl")
     get '/openid/auth', :foo => "bar"
-    assert last_response.ok?
+    assert last_response.redirect?
+    assert_equal "http://example.org/auth/identity", last_response['location']
   end
 
-  test "successful login with id select" do
-    user = FactoryGirl.create(:user, :username => 'viking')
-    approval = FactoryGirl.create(:approval, :user => user)
+  test "logging in after checkid_setup request with id select and approval is handled by the server object" do
+    user = stub('user', :username => 'viking')
+    auth = stub('authentication', :user => user)
+    Cactuar::Authentication.expects(:[]).with({
+      :provider => 'identity', :uid => 'viking'
+    }).returns(auth)
+
+    approval = stub('approval')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(approval)
+    })
 
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => nil, :id_select => true })
 
-    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
-    assert last_response.ok?
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
+    post('/auth/identity/callback', {}, {
+      'rack.session' => { 'oid_request' => @oid_request },
+      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+    })
+    assert_equal 200, last_response.status, last_response.headers.inspect
     assert_equal "blargh", last_response.body
   end
 
-  test "successful login without id select" do
-    user = FactoryGirl.create(:user, :username => 'viking')
-    approval = FactoryGirl.create(:approval, :user => user)
+  test "logging in after checkid_setup request without id select is handled by the server object" do
+    user = stub('user', :username => 'viking')
+    auth = stub('authentication', :user => user)
+    Cactuar::Authentication.expects(:[]).with({
+      :provider => 'identity', :uid => 'viking'
+    }).returns(auth)
+
+    approval = stub('approval')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(approval)
+    })
 
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
-    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
+    post('/auth/identity/callback', {}, {
+      'rack.session' => { 'oid_request' => @oid_request },
+      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+    })
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "failed login" do
-    user = FactoryGirl.build(:user, :username => 'viking')
-    oid_request = stub('oid request')
-
-    post '/login', { 'username' => 'viking', 'password' => 'wrong' }, { 'rack.session' => { 'oid_request' => oid_request } }
-    assert last_response.ok?
-    assert_match %r{<h1>Login</h1>}, last_response.body
-  end
-
-  test "cancelled login" do
-    user = FactoryGirl.build(:user, :username => 'viking')
+  test "cancelled authentication during openid request" do
     oid_request = stub('oid request', :cancel_url => "http://leetsauce.org")
-
-    post '/login', { 'cancel' => 'Cancel' }, { 'rack.session' => { 'oid_request' => oid_request } }
+    get('/auth/failure', {}, {
+      'rack.session' => { 'oid_request' => oid_request }
+    })
     assert last_response.redirect?
     assert_equal "http://leetsauce.org", last_response['location']
   end
 
-  test "correct login for wrong identifier" do
-    user = FactoryGirl.build(:user, :username => 'viking')
+  test "logging in with incorrect user after checkid_setup request without id select redirects to login" do
     oid_request = stub('oid request', {
       :identity => 'http://example.org/monkey', :id_select => false
     })
 
-    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => oid_request } }
-    assert last_response.ok?
-    assert_match %r{<h1>Login</h1>}, last_response.body
+    user = stub('user', :username => 'viking')
+    auth = stub('authentication', :user => user)
+    Cactuar::Authentication.expects(:[]).with({
+      :provider => 'identity', :uid => 'viking'
+    }).returns(auth)
+
+    post('/auth/identity/callback', {}, {
+      'rack.session' => { 'oid_request' => oid_request },
+      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+    })
+    assert last_response.redirect?
+    assert_equal "http://example.org/auth/identity", last_response['location']
   end
 
-  test "logged in but untrusted root with immediate" do
-    user = FactoryGirl.build(:user, :username => "viking")
+  test "checkid_immediate request when logged in for untrusted root is handled by server object" do
+    user = stub('user', :username => 'viking')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(nil)
+    })
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
     @oid_request.stubs({
-      :identity => "http://example.org/viking",
-      :mode => "checkid_immediate",
+      :identity => "http://example.org/viking", :mode => "checkid_immediate",
       :id_select => false, :immediate => true
     })
     @oid_request.expects(:answer).with(false, "http://example.org/openid/auth").returns(@oid_response)
 
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
-  test "logged in but untrusted root without immediate" do
-    user = FactoryGirl.create(:user, :username => "viking")
+  test "checkid_setup request when logged in but untrusted root lets user decide what to do" do
+    user = stub('user', :username => 'viking')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(nil)
+    })
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
     @oid_request.stubs({
       :identity => "http://example.org/viking",
       :mode => "checkid_setup",
       :id_select => false, :immediate => false
     })
-
-    get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
+    get '/openid/auth', { 'foo' => 'bar' },
+      { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
     assert_match /trust/, last_response.body
   end
 
-  test "not logged in with untrusted root" do
-    user = FactoryGirl.create(:user, :username => "viking")
+  test "logging in after checkid_setup request without id select for untrusted root allows user to decide what to do" do
+    user = stub('user', :username => 'viking')
+    auth = stub('authentication', :user => user)
+    Cactuar::Authentication.expects(:[]).with({
+      :provider => 'identity', :uid => 'viking'
+    }).returns(auth)
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(nil)
+    })
 
-    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
-
-    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
+    @oid_request.stubs({
+      :identity => "http://example.org/viking", :id_select => false
+    })
+    post('/auth/identity/callback', {}, {
+      'rack.session' => { 'oid_request' => @oid_request },
+      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+    })
     assert last_response.ok?
     assert_match /trust/, last_response.body
   end
 
-  test "simple registration from auth" do
-    user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
-    approval = FactoryGirl.create(:approval, :user => user)
+  test "simple registration" do
+    user = stub('user', :fullname => "Jeremy Stephens", :email => 'test@example.com')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
+    approval = stub('approval')
+    user.expects(:approvals_dataset).returns(mock {
+      expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(approval)
+    })
 
     @oid_request.stubs({
       :identity => "http://example.org/viking",
@@ -289,101 +352,156 @@ class TestCactuar < Test::Unit::TestCase
     })
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
 
-    sreg_request = mock("sreg request", :all_requested_fields => %w{email fullname})
+    sreg_request = mock("sreg request", {
+      :all_requested_fields => %w{email fullname}
+    })
     OpenID::SReg::Request.expects(:from_openid_request).returns(sreg_request)
     sreg_response = mock("sreg response")
-    OpenID::SReg::Response.expects(:extract_response).with(sreg_request, { 'fullname' => "Jeremy Stephens", 'email' => 'test@example.com' }).returns(sreg_response)
+    OpenID::SReg::Response.expects(:extract_response).
+      with(sreg_request, {'fullname' => "Jeremy Stephens", 'email' => 'test@example.com'}).
+      returns(sreg_response)
     @oid_response.expects(:add_extension).with(sreg_response)
 
-    get '/openid/auth', { 'foo' => 'bar' }, { 'rack.session' => { 'username' => 'viking' } }
-    assert last_response.ok?
-    assert_equal "blargh", last_response.body
-  end
-
-  test "simple registration from login" do
-    user = FactoryGirl.create(:user, :username => "viking", :first_name => "Jeremy", :last_name => "Stephens", :email => "test@example.com")
-    approval = FactoryGirl.create(:approval, :user => user)
-
-    @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
-    @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
-
-    sreg_request = mock("sreg request", :all_requested_fields => %w{email fullname})
-    OpenID::SReg::Request.expects(:from_openid_request).returns(sreg_request)
-    sreg_response = mock("sreg response")
-    OpenID::SReg::Response.expects(:extract_response).with(sreg_request, { 'fullname' => "Jeremy Stephens", 'email' => 'test@example.com' }).returns(sreg_response)
-    @oid_response.expects(:add_extension).with(sreg_response)
-
-    post '/login', { 'username' => 'viking', 'password' => 'secret' }, { 'rack.session' => { 'oid_request' => @oid_request } }
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
+    get('/openid/auth', { 'foo' => 'bar' }, {
+      'rack.session' => { 'username' => 'viking' }
+    })
     assert last_response.ok?
     assert_equal "blargh", last_response.body
   end
 
   test "signup" do
+    user = stub('user', {
+      :username => nil, :first_name => nil, :last_name => nil, :email => nil
+    })
+    Cactuar::User.expects(:new).returns(user)
+    identity = stub('identity')
+    Cactuar::Identity.expects(:new).returns(identity)
     get '/signup'
     assert last_response.ok?
   end
 
   test "successful signup" do
-    count = Cactuar::User.count
-    post '/signup', { 'user' => FactoryGirl.attributes_for(:user) }
-    assert_equal count + 1, Cactuar::User.count
+    seq = SequenceHelper.new("signup")
+
+    user = stub('user', :username => 'foo')
+    identity = stub('identity', :username => 'foo')
+    seq << Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
+    seq << user.expects(:valid?).returns(true)
+    seq << Cactuar::Identity.expects(:new).with({
+      'username' => 'foo', 'password' => 'bar',
+      'password_confirmation' => 'bar'
+    }).returns(identity)
+    seq << identity.expects(:valid?).returns(true)
+    seq << user.expects(:save).returns(true)
+    seq << identity.expects(:save).returns(true)
+    seq << Cactuar::Authentication.expects(:create).with({
+      :provider => 'identity', :uid => 'foo', :user => user
+    }).returns(true)
+    post('/signup', {
+      'user' => {'username' => 'foo'},
+      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
+    })
     assert last_response.redirect?
   end
 
-  test "failed signup" do
-    count = Cactuar::User.count
-    post '/signup', { 'user' => FactoryGirl.attributes_for(:user, :password => 'foobar') }
-    assert_equal count, Cactuar::User.count
+  test "invalid user during signup" do
+    user = stub('user', {
+      :username => 'foo', :first_name => nil, :last_name => nil,
+      :email => nil
+    })
+    Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
+    user.expects(:valid?).returns(false)
+    post('/signup', {
+      'user' => {'username' => 'foo'},
+      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
+    })
     assert last_response.ok?
   end
 
-  test "positive decision" do
-    user = FactoryGirl.create(:user, :username => 'viking')
+  test "invalid identity during signup" do
+    seq = SequenceHelper.new("signup")
+
+    user = stub('user', {
+      :username => 'foo', :first_name => nil, :last_name => nil,
+      :email => nil
+    })
+    identity = stub('identity', :username => 'foo')
+    seq << Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
+    seq << user.expects(:valid?).returns(true)
+    seq << Cactuar::Identity.expects(:new).with({
+      'username' => 'foo', 'password' => 'bar',
+      'password_confirmation' => 'bar'
+    }).returns(identity)
+    seq << identity.expects(:valid?).returns(false)
+    post('/signup', {
+      'user' => {'username' => 'foo'},
+      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
+    })
+    assert last_response.ok?
+  end
+
+  test "server object handles openid request after a positive decision" do
+    user = stub('user')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
+    Cactuar::Approval.expects(:create).
+      with(:user => user, :trust_root => 'http://leetsauce.org')
 
     @oid_request.expects(:answer).with(true, nil, "http://example.org/viking").returns(@oid_response)
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
-    count = user.approvals_dataset.count
+    @server.expects(:encode_response).with(@oid_response).returns(@web_response)
     post '/openid/decide', { 'approve' => 'Yes' }, { 'rack.session' => { 'oid_request' => @oid_request, 'username' => 'viking' } }
     assert last_response.ok?
     assert_equal "blargh", last_response.body
-    assert_equal count + 1, user.approvals_dataset.count
   end
 
-  test "negative decision" do
-    user = FactoryGirl.create(:user, :username => 'viking')
+  test "redirect to cancel url after negative decision" do
+    user = stub('user')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
 
     @oid_request.stubs({
       :identity => "http://example.org/viking", :id_select => false,
       :cancel_url => "http://leetsauce.org"
     })
 
-    count = user.approvals_dataset.count
-    post '/openid/decide', { 'approve' => 'No' }, { 'rack.session' => { 'oid_request' => @oid_request, 'username' => 'viking' } }
+    post('/openid/decide', { 'approve' => 'No' }, {
+      'rack.session' => {
+        'oid_request' => @oid_request, 'username' => 'viking'
+      }
+    })
     assert last_response.redirect?
     assert_equal "http://leetsauce.org", last_response['location']
-    assert_equal count, user.approvals_dataset.count
   end
 
   test "normal login" do
-    user = FactoryGirl.create(:user, :username => 'viking')
+    user = stub('user', :username => 'viking')
+    auth = stub('authentication', :user => user)
+    Cactuar::Authentication.expects(:[]).with({
+      :provider => 'identity', :uid => 'viking'
+    }).returns(auth)
 
     get '/login'
-    assert last_response.ok?
+    assert last_response.redirect?
+    assert_equal "http://example.org/auth/identity", last_response['location']
 
-    post '/login', :username => 'viking', :password => 'secret'
+    post('/auth/identity/callback', {}, {
+      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+    })
     assert last_response.redirect?
     assert_equal "http://example.org/account", last_response['location']
   end
 
-  test "failed normal login" do
-    user = FactoryGirl.build(:user, :username => 'viking')
-    post '/login', :username => 'viking', :password => 'wrongpassword'
-    assert last_response.ok?
+  test "failed normal login redirects to root" do
+    get '/auth/failure'
+    assert last_response.redirect?
+    assert_equal "http://example.org/", last_response['location']
   end
 
   test "account" do
-    user = FactoryGirl.build(:user, :username => 'viking')
+    #user = stub('user')
+    #Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
     get '/account', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
@@ -391,7 +509,7 @@ class TestCactuar < Test::Unit::TestCase
   test "account requires login" do
     get '/account'
     assert last_response.redirect?
-    assert_equal "http://example.org/login", last_response['location']
+    assert_equal "http://example.org/auth/identity", last_response['location']
   end
 
   test "logout" do
@@ -400,7 +518,9 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   test "admin" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
+    user = stub('user', :admin => true)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+
     get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
@@ -409,29 +529,44 @@ class TestCactuar < Test::Unit::TestCase
   test "admin requires login" do
     get '/admin'
     assert last_response.redirect?
-    assert_equal "http://example.org/login", last_response['location']
+    assert_equal "http://example.org/auth/identity", last_response['location']
   end
 
   test "admin requires administrator" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => false)
+    user = stub('user', :admin => false)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
     get '/admin', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.forbidden?
   end
 
   test "admin users" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
+    user = stub('user', :admin => true)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
     get '/admin/users', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
 
   test "admin new user" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
+    user = stub('user', :admin => true)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
     get '/admin/users/new', {}, { 'rack.session' => { 'username' => 'viking' } }
     assert last_response.ok?
   end
 
   test "admin create user" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
+    user = stub('user', :admin => true)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+    new_user = stub('new user', {
+      :email => 'foo@example.org', :first_name => 'Foo',
+      :activation_code => "123456abcd"
+    })
+    Cactuar::User.expects(:new).with({
+      'username' => 'foo', 'first_name' => 'Foo',
+      'last_name' => 'Bar', 'email' => 'foo@example.org'
+    }).returns(new_user)
+    new_user.expects(:valid?).returns(true)
+    new_user.expects(:save)
+
     mail = mock('e-mail', :deliver! => nil)
     Mail.expects(:new).with do |hsh|
       assert_kind_of String, hsh[:body]
@@ -447,54 +582,81 @@ class TestCactuar < Test::Unit::TestCase
   end
 
   test "user activation form" do
-    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
-    get "/activate/#{user.activation_code}"
+    user = stub('user', {
+      :username => 'foo', :activation_code => "abcdef", :errors => []
+    })
+    Cactuar::User.expects(:filter).
+      with({:activation_code => 'abcdef'}, ~{:activated => true}).
+      returns(mock(:first => user))
+    get "/activate/abcdef"
     assert last_response.ok?
   end
 
   test "user activation" do
-    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
-    post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
+    seq = SequenceHelper.new('activation')
+    user = stub('user', :username => 'foo')
+    seq << Cactuar::User.expects(:filter).
+      with({:activation_code => 'abcdef'}, ~{:activated => true}).
+      returns(mock(:first => user))
+    seq << user.expects(:set_only).with(kind_of(Hash), :password, :password_confirmation)
+    seq << user.expects(:valid?).returns(true)
+    seq << user.expects(:activated=).with(true)
+    seq << user.expects(:save)
+    post "/activate/abcdef", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
     assert last_response.ok?
-    user.refresh
-    assert user.activated, "Wasn't activated"
   end
 
   test "failed user activation" do
-    user = FactoryGirl.create(:user, :username => 'viking', :password => nil, :activated => false)
-    post "/activate/#{user.activation_code}", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "junkbar" } }
+    seq = SequenceHelper.new('activation')
+    user = stub('user', {
+      :username => 'foo', :activation_code => "abcdef", :errors => []
+    })
+    seq << Cactuar::User.expects(:filter).
+      with({:activation_code => 'abcdef'}, ~{:activated => true}).
+      returns(mock(:first => user))
+    seq << user.expects(:set_only).with(kind_of(Hash), :password, :password_confirmation)
+    seq << user.expects(:valid?).returns(false)
+    post "/activate/abcdef", { 'user' => { 'password' => "blahblah", 'password_confirmation' => "blahblah" } }
     assert last_response.ok?
   end
 
   test "account edit" do
-    user = FactoryGirl.create(:user, :username => 'viking')
+    user = stub('user', :email => 'foo@example.org')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
     get '/account/edit', {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.ok?, "Status wasn't OK, it was #{last_response.status}"
   end
 
   test "successful account update" do
-    user = FactoryGirl.create(:user, :username => 'viking')
+    seq = SequenceHelper.new('updating')
+    user = stub('user')
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+    seq << user.expects(:set_only).
+      with(kind_of(Hash), :current_password, :password, :password_confirmation, :email)
+    seq << user.expects(:valid?).returns(true)
+    seq << user.expects(:save)
     post '/account/edit', { 'user' => { 'current_password' => 'secret', 'password' => 'foobar', 'password_confirmation' => 'foobar' } }, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/account", last_response['location']
-    user.reload
-    assert_equal user.encrypt('foobar'), user.crypted_password
   end
 
   test "delete user" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
-    user_2 = FactoryGirl.create(:user)
-    delete "/admin/users/#{user_2.id}", {}, { 'rack.session' => {'username' => 'viking'} }
+    user = stub('user', :admin => true, :id => 456)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+    user_2 = stub('user to delete', :id => 123)
+    Cactuar::User.expects(:[]).with('123').returns(user_2)
+    user_2.expects(:destroy)
+    delete "/admin/users/123", {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
-    assert_equal 0, Cactuar::User.filter(:id => user_2.id).count, "User wasn't deleted"
   end
 
   test "can't delete self" do
-    user = FactoryGirl.create(:user, :username => 'viking', :admin => true)
-    delete "/admin/users/#{user.id}", {}, { 'rack.session' => {'username' => 'viking'} }
+    user = stub('user', :admin => true, :id => 123)
+    Cactuar::User.expects(:[]).with(:username => 'viking').returns(user)
+    Cactuar::User.expects(:[]).with('123').returns(user)
+    delete "/admin/users/123", {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
-    assert_equal 1, Cactuar::User.filter(:id => user.id).count, "User was deleted"
   end
 end

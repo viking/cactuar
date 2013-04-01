@@ -5,8 +5,9 @@ gem 'emk-sinatra-url-for'
 gem 'sinatra-static-assets'
 gem 'rack-openid'
 gem 'sequel'
-gem 'rack-flash'
 gem 'sqlite3-ruby'
+gem 'omniauth'
+gem 'omniauth-identity'
 gem 'mail'
 
 group :development do
@@ -16,4 +17,5 @@ group :development do
   gem 'nokogiri'
   gem 'factory_girl', :require => false
   gem 'guard-test'
+  gem 'rb-inotify', '~> 0.9'
 end

@@ -7,6 +7,8 @@ require 'openid/extensions/sreg'
 require 'sequel'
 require 'digest/md5'
 require 'mail'
+require 'omniauth'
+require 'omniauth/identity'
 
 class Cactuar < Sinatra::Base
   helpers Sinatra::UrlForHelper
@@ -18,6 +20,7 @@ class Cactuar < Sinatra::Base
   set :root,   File.join(File.dirname(__FILE__), '..')
   set :public_dir, File.join(File.dirname(__FILE__), '..', 'public')
   set :views,  File.join(File.dirname(__FILE__), '..', 'views')
+  set :provider, 'identity'
   set :methodoverride, true
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
@@ -50,6 +53,16 @@ class Cactuar < Sinatra::Base
       @current_user ||= session['username'] ? User[:username => session['username']] : nil
     end
 
+    def current_user=(user)
+      @current_user = user
+      if user
+        session['username'] = user.username
+      else
+        session.delete('username')
+      end
+      user
+    end
+
     def is_authorized?(identity_url)
       session['username'] && identity_url == user_identity_url
     end
@@ -58,10 +71,14 @@ class Cactuar < Sinatra::Base
       current_user && current_user.approvals_dataset[:trust_root => trust_root]
     end
 
+    def redirect_to_login
+      redirect url_for('/auth/' + settings.provider)
+    end
+
     def authenticate!
       if !session['username']
         session['return_to'] = request.fullpath
-        redirect url_for('/login')
+        redirect_to_login
       end
     end
 
@@ -86,8 +103,8 @@ class Cactuar < Sinatra::Base
       oid_response.add_extension(sreg_response)
     end
 
-    def finalize_auth(oid_request, identity)
-      oid_response = oid_request.answer(true, nil, identity)
+    def finalize_auth(oid_request, identity_url)
+      oid_response = oid_request.answer(true, nil, identity_url)
       add_sreg(oid_request, oid_response)
       # TODO: add pape
       oid_response
@@ -148,7 +165,7 @@ class Cactuar < Sinatra::Base
     oid_response = nil
     case oid_request.mode
     when "checkid_setup", "checkid_immediate"
-      identity = oid_request.identity
+      identity_url = oid_request.identity
 
       if oid_request.id_select
         # This happens when the user specified OP identifier
@@ -159,22 +176,22 @@ class Cactuar < Sinatra::Base
           oid_response = oid_request.answer(false)
         elsif session['username']
           # Set identity to currently logged in user
-          identity = user_identity_url
+          identity_url = user_identity_url
         else
           # No user is logged in
           session['oid_request'] = oid_request
-          return erb(:login)
+          return redirect_to_login
         end
       end
 
       if oid_response.nil?
         # The only case this doesn't happen is on an id_select/immediate
 
-        if is_authorized?(identity)
+        if is_authorized?(identity_url)
           # Logged in
 
           if is_trusted?(oid_request.trust_root)
-            oid_response = finalize_auth(oid_request, identity)
+            oid_response = finalize_auth(oid_request, identity_url)
           else
             if oid_request.immediate
               oid_response = oid_request.answer(false, url_for("/openid/auth", :full))
@@ -190,7 +207,7 @@ class Cactuar < Sinatra::Base
         else
           # No user is logged in
           session['oid_request'] = oid_request
-          return erb(:login)
+          return redirect_to_login
         end
       end
     else
@@ -217,45 +234,61 @@ class Cactuar < Sinatra::Base
 
   get '/signup' do
     @user = User.new
+    @identity = Identity.new
     erb :signup
   end
 
   post '/signup' do
-    @user = User.new(params[:user])
-    if @user.save
-      redirect url_for("/#{@user.username}")
-    else
-      erb :signup
+    @user = User.new(params[:user].merge('activated' => true))
+    if @user.valid?
+      identity_attribs = params[:identity] || {}
+      identity_attribs.update('username' => @user.username)
+      @identity = Identity.new(identity_attribs)
+      if @identity.valid?
+        @user.save
+        @identity.save
+        Authentication.create({
+          :provider => settings.provider,
+          :uid => @identity.username,
+          :user => @user
+        })
+        redirect user_identity_url
+      end
     end
+    erb :signup
   end
 
   get '/login' do
-    erb(:login, :locals => {:login_action => "/login"})
+    redirect_to_login
   end
 
-  post '/login' do
+  get_or_post '/auth/:provider/callback' do
     # If oid_request is non-nil, it means we're trying to login as a result
     # of an OpenID authentication request instead of a direct login attempt
     oid_request = session.delete('oid_request')
-    if params['cancel']
-      cancel_url = oid_request ? oid_request.cancel_url : url_for("/")
-      return redirect(cancel_url)
-    end
 
-    if user = User.authenticate(params['username'], params['password'])
-      session['username'] = user.username
+    auth_hash = env['omniauth.auth']
+    auth = Authentication[{
+      :provider => auth_hash['provider'],
+      :uid => auth_hash['uid']
+    }]
+    if auth
+      self.current_user = auth.user
 
       if oid_request
-        identity = user_identity_url
-        if oid_request.id_select || identity == oid_request.identity
+        identity_url = user_identity_url
+        if oid_request.id_select || identity_url == oid_request.identity
           if is_trusted?(oid_request.trust_root)
-            oid_response = finalize_auth(oid_request, identity)
+            oid_response = finalize_auth(oid_request, identity_url)
             return render_openid_response(oid_response)
           else
             session['oid_request'] = oid_request
             @trust_root = oid_request.trust_root
             return erb(:decide)
           end
+        else
+          # Authenticated with wrong username
+          redirect_to_login
         end
       else
         # Normal login attempt
@@ -267,12 +300,18 @@ class Cactuar < Sinatra::Base
         redirect url
       end
     else
-      erb(:login)
+      redirect url_for('/')
     end
   end
 
+  get '/auth/failure' do
+    oid_request = session.delete('oid_request')
+    cancel_url = oid_request ? oid_request.cancel_url : url_for("/")
+    return redirect(cancel_url)
+  end
+
   get '/logout' do
-    session.delete('username')
+    self.current_user = nil
     "You have been logged out."
   end
 
@@ -321,7 +360,7 @@ class Cactuar < Sinatra::Base
   end
 
   delete '/admin/users/:id' do
-    @user = User[:id => params[:id]]
+    @user = User[params[:id]]
     @user.destroy if @user && @user.id != current_user.id
     redirect url_for('/admin/users')
   end
@@ -337,7 +376,7 @@ class Cactuar < Sinatra::Base
     if @user.valid?
       @user.activated = true
       @user.save
-      session['username'] = @user.username
+      self.current_user = @user
       erb(:activated)
     else
       erb(:activate)
@@ -360,3 +399,5 @@ end
 Sequel::Model.plugin :validation_helpers
 require File.dirname(__FILE__) + "/cactuar/user"
 require File.dirname(__FILE__) + "/cactuar/approval"
+require File.dirname(__FILE__) + "/cactuar/identity"
+require File.dirname(__FILE__) + "/cactuar/authentication"

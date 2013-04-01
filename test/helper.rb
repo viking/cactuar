@@ -18,6 +18,17 @@ class Rack::Session::Cookie
   end
 end
 
+class Sequel::Model
+  def save!
+    self.class.raise_on_save_failure = true
+    begin
+      save
+    ensure
+      self.class.raise_on_save_failure = false
+    end
+  end
+end
+
 class Test::Unit::TestCase
   alias_method :run_without_transactions, :run
 
@@ -27,6 +38,16 @@ class Test::Unit::TestCase
       result = run_without_transactions(*args, &block)
     end
     result
+  end
+end
+
+class SequenceHelper
+  def initialize(name)
+    @seq = Mocha::Sequence.new(name)
+  end
+
+  def <<(exp)
+    exp.in_sequence(@seq)
   end
 end
 
