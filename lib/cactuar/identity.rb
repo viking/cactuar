@@ -17,7 +17,7 @@ class Cactuar
       Digest::MD5.hexdigest("#{salt}--#{password}")
     end
 
-    def nickname
+    def uid
       username
     end
 

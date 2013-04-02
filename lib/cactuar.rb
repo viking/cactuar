@@ -244,8 +244,8 @@ class Cactuar < Sinatra::Base
 
     auth_hash = env['omniauth.auth']
     auth = Authentication[{
-      :provider => auth_hash['provider'],
-      :uid => auth_hash['uid']
+      :provider => auth_hash.provider,
+      :uid => auth_hash.uid
     }]
     if auth
       self.current_user = auth.user

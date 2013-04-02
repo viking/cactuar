@@ -121,4 +121,9 @@ class TestIdentity < Test::Unit::TestCase
     })
     identity.save
   end
+
+  test "uid is equal to username" do
+    identity = FactoryGirl.build(:identity)
+    assert_equal identity.username, identity.uid
+  end
 end
