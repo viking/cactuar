@@ -17,6 +17,7 @@ OmniAuth.config.test_mode = true
 class Rack::Session::Cookie
   def call(env)
     if !env.has_key?('rack.session')
+      # So OmniAuth doesn't complain
       env = env.merge('rack.session' => {})
     end
     @app.call(env)

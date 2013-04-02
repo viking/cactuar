@@ -6,7 +6,7 @@ Bundler.require
 require './lib/cactuar'
 Cactuar.use OmniAuth::Builder do
   provider(:identity, {
-    :fields => [:email, :nickname, :first_name, :last_name, :location, :phone],
+    :fields => [:username, :email, :nickname, :first_name, :last_name, :location, :phone],
     :model => Cactuar::Identity
   })
 end
