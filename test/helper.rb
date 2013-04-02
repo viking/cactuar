@@ -12,8 +12,13 @@ ENV['RACK_ENV'] = 'test'
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'cactuar'
 
+OmniAuth.config.test_mode = true
+
 class Rack::Session::Cookie
   def call(env)
+    if !env.has_key?('rack.session')
+      env = env.merge('rack.session' => {})
+    end
     @app.call(env)
   end
 end

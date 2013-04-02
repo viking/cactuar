@@ -22,5 +22,11 @@ FactoryGirl.define do
     i.sequence(:username) { |n| "user_#{n}" }
     i.password "secret"
     i.password_confirmation "secret"
+    i.nickname "dudeguy"
+    i.first_name "Dude"
+    i.last_name "Guy"
+    i.email "dude@example.org"
+    i.location "Los Angeles, CA"
+    i.phone "555-4202"
   end
 end

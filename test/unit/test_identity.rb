@@ -92,9 +92,33 @@ class TestIdentity < Test::Unit::TestCase
     assert_equal model, Cactuar::Identity.locate('foo')
   end
 
-  test "nickname is the same as username" do
+  test "persisted? is false if record is unsaved" do
+    identity = FactoryGirl.build(:identity)
+    assert !identity.persisted?
+  end
+
+  test "persisted? is true if record is saved" do
     identity = FactoryGirl.create(:identity)
-    assert_equal identity.username, identity.nickname
-    assert_equal({'nickname' => identity.username}, identity.info)
+    assert identity.persisted?
+  end
+
+  test "create user and authentication after create" do
+    identity = FactoryGirl.build(:identity)
+    user = stub('user')
+    Cactuar::User.expects(:create).with({
+      'username' => identity.username,
+      'email' => identity.email,
+      'nickname' => identity.nickname,
+      'first_name' => identity.first_name,
+      'last_name' => identity.last_name,
+      'location' => identity.location,
+      'phone' => identity.phone
+    }).returns(user)
+    Cactuar::Authentication.expects(:create).with({
+      'provider' => 'identity',
+      'uid' => identity.username,
+      'user' => user
+    })
+    identity.save
   end
 end

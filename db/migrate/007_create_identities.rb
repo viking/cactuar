@@ -5,8 +5,15 @@ Sequel.migration do
       String :username
       String :crypted_password
       String :salt
+
+      String :email
+      String :nickname
+      String :first_name
+      String :last_name
+      String :location
+      String :phone
     end
-    self[:users].select(:id, :username, :crypted_password, :salt).each do |row|
+    self[:users].select(:id, :username, :crypted_password, :salt, :email, :first_name, :last_name).each do |row|
       self[:identities].insert(row.reject { |k, v| k == :id })
       self[:authentications].insert({
         :provider => 'identity', :uid => row[:username], :user_id => row[:id]

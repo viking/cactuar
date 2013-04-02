@@ -23,6 +23,11 @@ class TestCactuar < Test::Unit::TestCase
     @server.stubs(:encode_response).returns(@web_response)
     OpenID::Server::Server.stubs(:new).returns(@server)
     OpenID::SReg::Request.stubs(:from_openid_request).returns(nil)
+
+    OmniAuth.config.mock_auth[:developer] = OmniAuth::AuthHash.new({
+      :provider => 'developer', :uid => 'viking'
+    })
+    app.set :provider, 'developer'
   end
 
   test "yadis initiation" do
@@ -115,7 +120,7 @@ class TestCactuar < Test::Unit::TestCase
 
     get '/openid/auth', :foo => "bar"
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
   end
 
   test "checkid_setup request with id select when logged in and approved is handled by server object" do
@@ -199,14 +204,14 @@ class TestCactuar < Test::Unit::TestCase
 
     get '/openid/auth', :foo => "bar"
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
   end
 
   test "logging in after checkid_setup request with id select and approval is handled by the server object" do
     user = stub('user', :username => 'viking')
     auth = stub('authentication', :user => user)
     Cactuar::Authentication.expects(:[]).with({
-      :provider => 'identity', :uid => 'viking'
+      :provider => 'developer', :uid => 'viking'
     }).returns(auth)
 
     approval = stub('approval')
@@ -218,9 +223,9 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.stubs({ :identity => nil, :id_select => true })
 
     @server.expects(:encode_response).with(@oid_response).returns(@web_response)
-    post('/auth/identity/callback', {}, {
+    post('/auth/developer/callback', {}, {
       'rack.session' => { 'oid_request' => @oid_request },
-      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
     })
     assert_equal 200, last_response.status, last_response.headers.inspect
     assert_equal "blargh", last_response.body
@@ -230,7 +235,7 @@ class TestCactuar < Test::Unit::TestCase
     user = stub('user', :username => 'viking')
     auth = stub('authentication', :user => user)
     Cactuar::Authentication.expects(:[]).with({
-      :provider => 'identity', :uid => 'viking'
+      :provider => 'developer', :uid => 'viking'
     }).returns(auth)
 
     approval = stub('approval')
@@ -242,9 +247,9 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.stubs({ :identity => "http://example.org/viking", :id_select => false })
 
     @server.expects(:encode_response).with(@oid_response).returns(@web_response)
-    post('/auth/identity/callback', {}, {
+    post('/auth/developer/callback', {}, {
       'rack.session' => { 'oid_request' => @oid_request },
-      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
     })
     assert last_response.ok?
     assert_equal "blargh", last_response.body
@@ -267,15 +272,15 @@ class TestCactuar < Test::Unit::TestCase
     user = stub('user', :username => 'viking')
     auth = stub('authentication', :user => user)
     Cactuar::Authentication.expects(:[]).with({
-      :provider => 'identity', :uid => 'viking'
+      :provider => 'developer', :uid => 'viking'
     }).returns(auth)
 
-    post('/auth/identity/callback', {}, {
+    post('/auth/developer/callback', {}, {
       'rack.session' => { 'oid_request' => oid_request },
-      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
     })
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
   end
 
   test "checkid_immediate request when logged in for untrusted root is handled by server object" do
@@ -319,7 +324,7 @@ class TestCactuar < Test::Unit::TestCase
     user = stub('user', :username => 'viking')
     auth = stub('authentication', :user => user)
     Cactuar::Authentication.expects(:[]).with({
-      :provider => 'identity', :uid => 'viking'
+      :provider => 'developer', :uid => 'viking'
     }).returns(auth)
     user.expects(:approvals_dataset).returns(mock {
       expects(:[]).with(:trust_root => 'http://leetsauce.org').returns(nil)
@@ -328,9 +333,9 @@ class TestCactuar < Test::Unit::TestCase
     @oid_request.stubs({
       :identity => "http://example.org/viking", :id_select => false
     })
-    post('/auth/identity/callback', {}, {
+    post('/auth/developer/callback', {}, {
       'rack.session' => { 'oid_request' => @oid_request },
-      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
     })
     assert last_response.ok?
     assert_match /trust/, last_response.body
@@ -368,77 +373,6 @@ class TestCactuar < Test::Unit::TestCase
     })
     assert last_response.ok?
     assert_equal "blargh", last_response.body
-  end
-
-  test "signup" do
-    user = stub('user', {
-      :username => nil, :first_name => nil, :last_name => nil, :email => nil
-    })
-    Cactuar::User.expects(:new).returns(user)
-    identity = stub('identity')
-    Cactuar::Identity.expects(:new).returns(identity)
-    get '/signup'
-    assert last_response.ok?
-  end
-
-  test "successful signup" do
-    seq = SequenceHelper.new("signup")
-
-    user = stub('user', :username => 'foo')
-    identity = stub('identity', :username => 'foo')
-    seq << Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
-    seq << user.expects(:valid?).returns(true)
-    seq << Cactuar::Identity.expects(:new).with({
-      'username' => 'foo', 'password' => 'bar',
-      'password_confirmation' => 'bar'
-    }).returns(identity)
-    seq << identity.expects(:valid?).returns(true)
-    seq << user.expects(:save).returns(true)
-    seq << identity.expects(:save).returns(true)
-    seq << Cactuar::Authentication.expects(:create).with({
-      :provider => 'identity', :uid => 'foo', :user => user
-    }).returns(true)
-    post('/signup', {
-      'user' => {'username' => 'foo'},
-      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
-    })
-    assert last_response.redirect?
-  end
-
-  test "invalid user during signup" do
-    user = stub('user', {
-      :username => 'foo', :first_name => nil, :last_name => nil,
-      :email => nil
-    })
-    Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
-    user.expects(:valid?).returns(false)
-    post('/signup', {
-      'user' => {'username' => 'foo'},
-      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
-    })
-    assert last_response.ok?
-  end
-
-  test "invalid identity during signup" do
-    seq = SequenceHelper.new("signup")
-
-    user = stub('user', {
-      :username => 'foo', :first_name => nil, :last_name => nil,
-      :email => nil
-    })
-    identity = stub('identity', :username => 'foo')
-    seq << Cactuar::User.expects(:new).with('username' => 'foo', 'activated' => true).returns(user)
-    seq << user.expects(:valid?).returns(true)
-    seq << Cactuar::Identity.expects(:new).with({
-      'username' => 'foo', 'password' => 'bar',
-      'password_confirmation' => 'bar'
-    }).returns(identity)
-    seq << identity.expects(:valid?).returns(false)
-    post('/signup', {
-      'user' => {'username' => 'foo'},
-      'identity' => {'password' => 'bar', 'password_confirmation' => 'bar'}
-    })
-    assert last_response.ok?
   end
 
   test "server object handles openid request after a positive decision" do
@@ -479,16 +413,16 @@ class TestCactuar < Test::Unit::TestCase
     user = stub('user', :username => 'viking')
     auth = stub('authentication', :user => user)
     Cactuar::Authentication.expects(:[]).with({
-      :provider => 'identity', :uid => 'viking'
+      :provider => 'developer', :uid => 'viking'
     }).returns(auth)
 
     get '/login'
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
 
-    post('/auth/identity/callback', {}, {
-      'omniauth.auth' => { 'provider' => 'identity', 'uid' => 'viking' }
-    })
+    post '/auth/developer/callback', {}, {
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
+    }
     assert last_response.redirect?
     assert_equal "http://example.org/account", last_response['location']
   end
@@ -509,7 +443,7 @@ class TestCactuar < Test::Unit::TestCase
   test "account requires login" do
     get '/account'
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
   end
 
   test "logout" do
@@ -529,7 +463,7 @@ class TestCactuar < Test::Unit::TestCase
   test "admin requires login" do
     get '/admin'
     assert last_response.redirect?
-    assert_equal "http://example.org/auth/identity", last_response['location']
+    assert_equal "http://example.org/auth/developer", last_response['location']
   end
 
   test "admin requires administrator" do

@@ -17,11 +17,12 @@ class Cactuar < Sinatra::Base
   use Rack::Session::Cookie, :secret => session_secret, :key => 'cactuar.session'
   set :logging, true
   set :erb, :trim => '-'
-  set :root,   File.join(File.dirname(__FILE__), '..')
+  set :root, File.join(File.dirname(__FILE__), '..')
   set :public_dir, File.join(File.dirname(__FILE__), '..', 'public')
-  set :views,  File.join(File.dirname(__FILE__), '..', 'views')
-  set :provider, 'identity'
+  set :views, File.join(File.dirname(__FILE__), '..', 'views')
+  set :provider, 'developer'
   set :methodoverride, true
+  set :protection, :nosniff => false
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
     File.expand_path(File.dirname(__FILE__) + '/..'),
@@ -230,32 +231,6 @@ class Cactuar < Sinatra::Base
     else
       redirect oid_request.cancel_url
     end
-  end
-
-  get '/signup' do
-    @user = User.new
-    @identity = Identity.new
-    erb :signup
-  end
-
-  post '/signup' do
-    @user = User.new(params[:user].merge('activated' => true))
-    if @user.valid?
-      identity_attribs = params[:identity] || {}
-      identity_attribs.update('username' => @user.username)
-      @identity = Identity.new(identity_attribs)
-      if @identity.valid?
-        @user.save
-        @identity.save
-        Authentication.create({
-          :provider => settings.provider,
-          :uid => @identity.username,
-          :user => @user
-        })
-        redirect user_identity_url
-      end
-    end
-    erb :signup
   end
 
   get '/login' do
