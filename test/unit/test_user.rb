@@ -1,33 +1,44 @@
 require 'helper'
 
 class TestUser < Test::Unit::TestCase
-  def test_sequel_model
+  test "sequel model" do
     assert_equal Sequel::Model, Cactuar::User.superclass
   end
 
-  def test_one_to_many_approvals
+  test "one to many approvals" do
     assert_respond_to Cactuar::User.new, :approvals
   end
 
-  def test_fullname
+  test "fullname" do
     user = FactoryGirl.create(:user, :first_name => 'Jeremy', :last_name => "Stephens")
     assert_equal "Jeremy Stephens", user.fullname
   end
 
-  def test_nil_fullname
+  test "nil fullname" do
     user = FactoryGirl.create(:user, :first_name => nil, :last_name => nil)
     assert_nil user.fullname
   end
 
-  def test_activation_code
+  test "activation code" do
     user = FactoryGirl.create(:user)
     assert_match /^[\da-z]{10}$/, user.activation_code
   end
 
-  def test_deletes_approvals_on_destroy
+  test "deletes approvals on destroy" do
     user = FactoryGirl.create(:user)
     approval = FactoryGirl.create(:approval, :user => user)
     user.destroy
     assert Cactuar::Approval[:id => approval.id].nil?, "Approval wasn't destroyed"
+  end
+
+  test "requires username" do
+    user = FactoryGirl.build(:user, :username => nil)
+    assert !user.valid?
+  end
+
+  test "requires unique username" do
+    user_1 = FactoryGirl.create(:user)
+    user_2 = FactoryGirl.build(:user, :username => user_1.username)
+    assert !user_2.valid?
   end
 end

@@ -23,6 +23,7 @@ class Cactuar < Sinatra::Base
   set :provider, 'developer'
   set :methodoverride, true
   set :protection, :nosniff => false
+  set :autocreation, false
 
   Database = Sequel.connect "sqlite://%s/db/%s.sqlite3" % [
     File.expand_path(File.dirname(__FILE__) + '/..'),
@@ -247,6 +248,22 @@ class Cactuar < Sinatra::Base
       :provider => auth_hash.provider,
       :uid => auth_hash.uid
     }]
+    if auth.nil? && settings.autocreation
+      user = User.new(:username => auth_hash.uid)
+      if user.valid?
+        user.save
+        new_auth = Authentication.new({
+          :provider => auth_hash.provider,
+          :uid => auth_hash.uid,
+          :user => user
+        })
+        if new_auth.valid?
+          new_auth.save
+          auth = new_auth
+        end
+      end
+    end
+
     if auth
       self.current_user = auth.user
 

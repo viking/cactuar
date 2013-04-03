@@ -28,6 +28,7 @@ class TestCactuar < Test::Unit::TestCase
       :provider => 'developer', :uid => 'viking'
     })
     app.set :provider, 'developer'
+    app.set :autocreation, false
   end
 
   test "yadis initiation" do
@@ -592,5 +593,63 @@ class TestCactuar < Test::Unit::TestCase
     delete "/admin/users/123", {}, { 'rack.session' => {'username' => 'viking'} }
     assert last_response.redirect?
     assert_equal "http://example.org/admin/users", last_response['location']
+  end
+
+  test "user auto-creation after authenticating" do
+    app.set :autocreation, true
+
+    seq = SequenceHelper.new('autocreation')
+    user = stub('user', :username => 'viking')
+    seq << Cactuar::User.expects(:new).with(:username => 'viking').returns(user)
+    seq << user.expects(:valid?).returns(true)
+    seq << user.expects(:save).returns(true)
+    auth = stub('authentication', :user => user)
+    seq << Cactuar::Authentication.expects(:new).
+      with(:provider => 'developer', :uid => 'viking', :user => user).
+      returns(auth)
+    seq << auth.expects(:valid?).returns(true)
+    seq << auth.expects(:save).returns(true)
+
+    post('/auth/developer/callback', {}, {
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
+    })
+    assert last_response.redirect?
+    assert_equal 'http://example.org/account', last_response['location']
+  end
+
+  test "user validation failure during auto-creation redirects to root" do
+    app.set :autocreation, true
+
+    seq = SequenceHelper.new('autocreation')
+    user = stub('user')
+    seq << Cactuar::User.expects(:new).with(:username => 'viking').returns(user)
+    seq << user.expects(:valid?).returns(false)
+
+    post('/auth/developer/callback', {}, {
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
+    })
+    assert last_response.redirect?
+    assert_equal 'http://example.org/', last_response['location']
+  end
+
+  test "authentication validation failure during auto-creation redirects to root" do
+    app.set :autocreation, true
+
+    seq = SequenceHelper.new('autocreation')
+    user = stub('user', :username => 'viking')
+    seq << Cactuar::User.expects(:new).with(:username => 'viking').returns(user)
+    seq << user.expects(:valid?).returns(true)
+    seq << user.expects(:save).returns(true)
+    auth = stub('authentication', :user => user)
+    seq << Cactuar::Authentication.expects(:new).
+      with(:provider => 'developer', :uid => 'viking', :user => user).
+      returns(auth)
+    seq << auth.expects(:valid?).returns(false)
+
+    post('/auth/developer/callback', {}, {
+      'omniauth.auth' => OmniAuth.config.mock_auth[:developer]
+    })
+    assert last_response.redirect?
+    assert_equal 'http://example.org/', last_response['location']
   end
 end

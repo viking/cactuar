@@ -59,15 +59,5 @@ class Cactuar
         self.crypted_password = encrypt(password)
       end
     end
-
-    def after_create
-      super
-      user = User.create(self.info.merge('username' => self.username))
-      Authentication.create({
-        'provider' => 'identity',
-        'uid' => self.username,
-        'user' => user
-      })
-    end
   end
 end

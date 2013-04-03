@@ -8,6 +8,12 @@ class Cactuar
 
     private
 
+    def validate
+      super
+      validates_presence [:username]
+      validates_unique [:username]
+    end
+
     def before_create
       super
       code = nil

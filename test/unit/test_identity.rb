@@ -102,26 +102,6 @@ class TestIdentity < Test::Unit::TestCase
     assert identity.persisted?
   end
 
-  test "create user and authentication after create" do
-    identity = FactoryGirl.build(:identity)
-    user = stub('user')
-    Cactuar::User.expects(:create).with({
-      'username' => identity.username,
-      'email' => identity.email,
-      'nickname' => identity.nickname,
-      'first_name' => identity.first_name,
-      'last_name' => identity.last_name,
-      'location' => identity.location,
-      'phone' => identity.phone
-    }).returns(user)
-    Cactuar::Authentication.expects(:create).with({
-      'provider' => 'identity',
-      'uid' => identity.username,
-      'user' => user
-    })
-    identity.save
-  end
-
   test "uid is equal to username" do
     identity = FactoryGirl.build(:identity)
     assert_equal identity.username, identity.uid
