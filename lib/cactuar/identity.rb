@@ -34,14 +34,14 @@ class Cactuar
 
       if !new?
         if encrypt(current_password) != crypted_password
-          errors[:current_password] << "is incorrect"
+          errors.add(:current_password, "is incorrect")
         end
       else
         validates_presence [:password]
       end
 
       if password && password_confirmation != password
-        errors[:password_confirmation] << 'does not match password'
+        errors.add(:password_confirmation, 'does not match password')
       end
     end
 

@@ -388,6 +388,7 @@ class Cactuar < Sinatra::Base
   end
 end
 
+Sequel.extension :core_extensions
 Sequel::Model.plugin :validation_helpers
 require File.dirname(__FILE__) + "/cactuar/user"
 require File.dirname(__FILE__) + "/cactuar/approval"
